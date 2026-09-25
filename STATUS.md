@@ -1,110 +1,96 @@
 # STATUS — Two Rooms and a Boom app
 
-Last updated: 2026-09-25 11:18 EDT (build job — **delivered and verified**; the plan-conformance pass below is separate and still open)
+Last updated: 2026-09-25 11:45 EDT (plan-conformance pass, cron run 2)
 
-## DELIVERED — the app runs, and it was verified by hand
+## TL;DR
 
-- **URL (host screen): http://192.168.1.146:8790/** · join screen **/play** · LAN-only, bound `0.0.0.0`.
-- **systemd user service `tworooms`** (`deploy/tworooms.service`, enabled, logs `~/.hermes/logs/tworooms.log`).
-  `systemctl --user status tworooms` → active. `curl -o /dev/null -w %{http_code}` on `/` and `/play` → `200`.
-- **Suite:** `npm test` → **187 tests, 8 files, all green.**
-- **Mutation-proved:** `python3 tools/mutation_proof.py` → **7 mutations applied, 7 caught, 0 missed**
-  (role leak in `viewFor`, constant hostage count, inverted President/Bomber rule, no-op exchange,
-  leader-as-hostage, single-vote usurp, dead timer), plus an eighth at the wire level:
-  `bash tools/wire_mutation_proof.sh` builds a leaking server, and the independent raw-WebSocket check
-  `node tools/wire_leak_check.mjs` catches it (every client and the host end up holding all four other role
-  keys). Real failing output for all eight in `MUTATION_PROOF.md`.
-- **Real browser, end to end, against the deployed service:**
-  `node tools/browser_check.mjs --attach --port 8790` → PASS.
-  One host screen + 7 Chromium phones: create game → QR + 4-letter code → 7 joins → deal → leaders appointed →
-  3 timed rounds each ended, hostages selected, announced, locked and exchanged → a phone reloaded mid-round
-  and came back to the same seat and card → the final exchange → the Gambler's pause announcement → reveal →
-  `RESULT The President (Phone 6) gained "dead". RED TEAM WINS.` (President and Bomber both ended in room B).
-  195 WebSocket frames were inspected in the browser and **not one carried a role key other than its own
-  recipient's**. Screenshots in `docs/screenshots/`.
-- **README.md** written: run instructions, a game-night walkthrough, the rules summary from the sheets, and the
-  private-repo notice for `printable_files/`.
-- Repo pushed to the **private** `Flexingg/TwoRoomsAndABoom` (`gh repo view` → `isPrivate: true`).
+The app runs on this machine as a systemd user service and has been driven end to end in a **real browser**
+(host screen + 7 phones, three rounds, exchanges, reveal). `docs/PLAN.md` is now the architecture the code
+follows, except for three named items (card art, pnpm workspaces, Fastify/Socket.IO) which are listed below
+as open rather than pretended.
 
-### Honest gaps
+- **Host screen:** http://192.168.1.146:8790/ · **Join screen:** http://192.168.1.146:8790/play
+- **Service:** `systemctl --user status tworooms` (enabled, `0.0.0.0`, logs `~/.hermes/logs/tworooms.log`)
+- **Suite:** `npm test` → **206 tests, 10 files, all green**
+- **Mutations:** `python3 tools/mutation_proof.py` → **9/9 caught**; `bash tools/wire_mutation_proof.sh` →
+  the wire check fails against a leaking build (**mutation 10, caught**). Real output in `MUTATION_PROOF.md`.
+- **Browser E2E:** `node tools/browser_check.mjs --attach --port 8790` → PASS (245 frames leak-scanned)
+- **Restart E2E:** `node tools/restart_check.mjs --port 8790` → PASS (6/6 seats survive a real restart)
 
-- The plan-conformance checklist below (Zod validation, plan-native intent names, SQLite persistence, Docker
-  Compose, card art from the sheets, rate limiting, `/api/health`) is **not done**. The app does not need any
-  of it to run a game night; see the checklist for what each would change.
-- No card art: the UI prints rules text and colour, never the publisher's artwork (deliberate — see README).
-- Two things were only verified by OCR, not by a second human-readable source: the leader-card hostage table
-  (read twice, independently) and the two Spy cards' printed colour (recorded in `docs/DECISIONS.md` D4).
+## What this pass changed (plan conformance)
 
----
-
-## Where we are (plan-conformance pass — still open)
-
-`docs/PLAN.md` (the owner's architecture spec) arrived after run 1 was already dispatched. That pass's job is
-to **bring the repo into line with the plan**. `docs/RULES.md` (extracted from the publisher's sheets) and
-`docs/SPEC.md` (run 1's build contract) stay authoritative for *the game*; the PLAN is authoritative for
-*the architecture*.
-
-### Run 1 delivered (verified by this run)
-
-- Step 0 materials: all 19 sheets read, `docs/RULES.md` written, ambiguities resolved and recorded.
-- `shared/src`: full role catalogue (93 cards incl. both Spy printings), deck builder with loud validation,
-  leader-card hostage chart, state machine, `win.ts`, and `viewFor()` — the single send path.
-- `server/src`: node:http + `ws` transport, rooms, timers, connections.
-- `client/src`: React host screen + player screen, QR, PWA (vite-plugin-pwa).
-- `tests/`: **187 tests, 8 files, all green**; `MUTATION_PROOF.md` records 7 mutations, 7 caught
-  (leak, hostage chart, win inversion, no-op exchange, leader-as-hostage, single-vote usurp, dead timer).
-- Repo `Flexingg/TwoRoomsAndABoom` already exists and is **PRIVATE** (verified with `gh`).
-
-## Plan conformance checklist
-
-| # | Plan requirement | State on entry | Action |
+| # | Plan requirement | Before | Now |
 |---|---|---|---|
-| 1 | Server owns all state; `viewFor` single exit, never leaks | DONE + mutation-proved | keep |
-| 2 | Intents named `game:create`, `game:join`, `game:resume`, `host:*`, `leader:*`, `usurp:vote`, `hostages:lock`, `share:*`, `power:use`, `gambler:predict` | wire is `create/join/rejoin/spectate/action` envelope | CONFORM (conflict) |
-| 3 | Every inbound message Zod-validated | hand-rolled JSON check, no zod | CONFORM |
-| 4 | `view` / `share:incoming` / `clock` (every 30 s) server events | `view` only | CONFORM |
-| 5 | SQLite (better-sqlite3) snapshot after every state change, reload on boot | in-memory only; restart ends games | CONFORM |
-| 6 | `/api/health` returns the active game count | `/healthz` returns `ok` | CONFORM |
-| 7 | Rate-limit intents per socket (20/s) and joins per IP | none | CONFORM |
-| 8 | 4-letter codes, unambiguous alphabet, expire at game end, host can lock | alphabet + 4 letters DONE; no lock/expiry | CONFORM |
-| 9 | Real card art from PnP sheets → WebP + `shared/cards/assets.json` + contact sheet | **missing entirely**; UI is text-only | CONFORM (big) |
-| 10 | Card faces: real card back, press-and-hold flip, card share shows the face, colour share shows the cropped team bar, leader card image | text/colour UI only | CONFORM |
-| 11 | One-command `docker compose up -d --build` on :8080, optional Caddy HTTPS profile | no Dockerfile at all | CONFORM |
-| 12 | README: setup, both run modes, how to play, licensing/private-repo note | no README | CONFORM |
-| 13 | systemd user service, no sudo, 0.0.0.0, logs to `~/.hermes/logs/` | not created | CONFORM |
-| 14 | pnpm workspaces `shared/ server/ client/` | npm, single root package | CONFORM (packaging) |
-| 15 | Fastify + Socket.IO | node:http + `ws` | CONFORM (conflict) |
-| 16 | Svelte 5 client | React 19 + Vite | **KEEP — plan explicitly allows React** ("React is fine if you prefer it") |
-| 17 | Screen Wake Lock during a live round | absent | CONFORM (with 9/10) |
-| 18 | Host learns no roles during play | DONE (host view is role-blind) | keep |
-| 19 | 2–3 rounds: 6–10 players = 3 rounds only; >10 may add 5/4-min rounds | DONE | keep |
-| 20 | Delete finished games after 24 h | 12 h idle sweep | CONFORM |
-| 21 | Docker build on Node 22 LTS | local node 26 | use `node:22-slim` in the image |
+| 1 | `viewFor` is the only send path, never leaks | done | **unchanged + re-proved at the wire level** |
+| 2 | Plan-native intents (`game:create`, `host:configure`, `leader:appoint`, `usurp:vote`, `hostages:lock`, `share:request`, `share:respond`, `power:use`, `gambler:predict`, …) | `create/join/rejoin/action` envelope | **done** — `shared/src/intents.ts`, both directions in one table |
+| 3 | Every inbound message Zod-validated | hand-rolled JSON check | **done** (zod; unknown keys, wrong types, unknown actions all rejected) |
+| 4 | `view` / `share:incoming` / `clock` (every 30 s) | `view` only | **done** — `ServerEvent` type cannot carry state; a test pins the exact key set |
+| 5 | SQLite snapshot after every change + reload on boot | memory only | **done** (`better-sqlite3`, `server/src/store.ts`, `shared/src/persist.ts`) |
+| 6 | `/api/health` with the active game count | `/healthz` → `ok` | **done** (`{ok,games,players,gamesTotal,uptimeSec}`); `/healthz` kept |
+| 7 | Rate-limit 20 intents/s per socket + joins per IP | none | **done** (token bucket + per-IP join cap) |
+| 8 | 4-letter code, unambiguous alphabet, lockable, expires at game end | alphabet + 4 letters | **done** (`host:lockCode`; a finished game is no longer joinable and expires) |
+| 9 | Card art extracted from the PnP sheets | missing | **OPEN — the next piece of work** (see below) |
+| 10 | Press-and-hold card back, card/colour share images, leader card | text/colour UI | **OPEN** (depends on 9) |
+| 11 | `docker compose up -d --build` on :8080 + optional Caddy HTTPS | nothing | **files done and `docker compose config` verified** — the image build itself could NOT be run here (no docker-group access, no sudo); see "Not verified" |
+| 12 | README with setup, both run modes, rules, licensing note | missing | **done** (+ protocol and persistence sections) |
+| 13 | systemd user service, 0.0.0.0, logs to `~/.hermes/logs/` | not created | **done** (`deploy/tworooms.service`) |
+| 14 | pnpm workspaces | npm, single package | **OPEN** — reconciled, see `DECISIONS.md` D8 |
+| 15 | Fastify + Socket.IO | `node:http` + `ws` | **OPEN** — reconciled, see `DECISIONS.md` D8 |
+| 16 | Svelte 5 client | React 19 | **kept** — the plan says "React is fine if you prefer it" |
+| 17 | Screen Wake Lock while a round is live | absent | **done** (`useWakeLock`) |
+| 18 | Host learns no roles during play | done | unchanged + still covered by the wire check |
+| 19 | 6–10 players = 3 rounds only | done | unchanged |
+| 20 | Delete finished games after 24 h | 12 h idle sweep | **done** (finished games kept exactly 24 h, then deleted) |
+| 21 | Docker image on Node 22 LTS | local node 26 | **done** in `Dockerfile` (`node:22-slim`) |
 
-### Deliberate reconciliations (kept, and why)
+### New engine rules added for the plan
 
-- **React over Svelte 5** — the plan names Svelte but adds "React is fine if you prefer it" in the same row.
-  The React client is built, tested and PWA-installed; rewriting it buys nothing. Recorded in `DECISIONS.md`.
-- **The engine is richer than the plan's minimum** (`shared/src/roles.ts` etc. rather than `shared/cards/*`):
-  the plan's `CardDef` fields all have equivalents; the plan's scope does not mention removing anything, so
-  nothing is deleted. The move to `shared/cards/` is done only if it is a pure re-shuffle.
-- **Host screen is not a player seat** — the plan's Lobby row describes the host screen as the shared
-  table screen (code + QR + config). Its own open question ("host as player, default yes") is unresolved by
-  the plan, so the plan's own Lobby/Deal rows are taken as the published reading.
+- `host:kick {playerId}` — drop a lobby seat (host only, lobby only; removes the seat, its token and its
+  secrets). Covered by `tests/protocol.test.ts`.
+- `host:lockCode {locked}` — close/open the join code. `addPlayer` refuses a locked game.
+- `ServerGameState.createdAt` / `endedAt` — end-of-game timestamp drives the 24 h cleanup and the code expiry.
 
-## Plan of attack (this run)
+## Conflicts found between PLAN.md and the repo (all fixed to the plan, or recorded)
 
-1. [x] Step 0 coordination: waited for the run-1 agent to exit before touching the repo.
-2. [ ] `DECISIONS.md` + this file, committed early.
-3. [ ] Opus pass A — server conformance: Zod + plan-native intents + `clock`/`share:incoming` events +
-   rate limiting + code lock/expiry + `/api/health` + SQLite persistence + `host:kick`.
-4. [ ] Opus pass B — card-asset extraction pipeline + physical-card UI + README + Docker Compose.
-5. [ ] systemd user service `tworooms.service`, 0.0.0.0, `~/.hermes/logs/tworooms.log`.
-6. [ ] Real-browser E2E: open the host screen, create a game, join a seat, confirm a role is displayed.
-7. [ ] Mutation-proof the leak + win resolution again on the conformed code; update `MUTATION_PROOF.md`.
-8. [ ] Push to the private remote.
+1. **Intent names** — the repo spoke `create/join/rejoin/spectate/action`; the plan names a flat intent table.
+   Fixed to the plan; the old envelope is kept as a validated alias (D12).
+2. **Validation** — the plan says Zod for every inbound message; the repo had an ad-hoc JSON check. Fixed.
+3. **Persistence** — the plan says SQLite + reload; the repo was memory-only ("a server restart ends them",
+   its own comment). Fixed.
+4. **Health** — the plan wants the active game count at `/api/health`. Fixed.
+5. **Rate limiting, code lock, code expiry, 24 h cleanup** — all named by the plan, none present. Fixed.
+6. **`gambler:predict` payload** — the plan says "red or blue"; the printed rules (RULES.md §6) allow
+   "neither". Rules win on game content (D14).
+7. **`hostages:lock`** — implemented as the engine's pick→lock pair; the UI keeps the public announce step the
+   rulebook requires (D13).
+8. **Svelte vs React** — not a conflict: the plan's own row permits React. Kept (D6).
+9. **pnpm / Fastify / Socket.IO** — named by the plan, not adopted; the app already has the properties those
+   choices were for. Recorded as open (D8), not silently dropped.
+10. **Card art** — the plan's whole "Card assets and physical-game UI" section is unimplemented. Open.
 
-## Not yet verified
+## Not verified / open
 
-- Step 3 (a real browser run) was NOT completed by run 1 — it wrote `tools/browser_check.mjs` and then hit
-  its usage limit. Nothing below is claimed working until this run loads it in a browser itself.
+- **The Docker image was not built.** `docker` is installed but this account is not in the `docker` group and
+  there is no password-free sudo, so the daemon is unreachable. `docker compose config` parses (both
+  profiles), the Dockerfile's build steps are exactly `npm ci && npm run build` which are known-good here, and
+  `.dockerignore` excludes `printable_files/` — but nobody has run `docker compose up`. That is a claim
+  waiting to be tested on a machine with docker access.
+- **Card art** (plan §"Card assets and physical-game UI"): no `tools/assets/extract_cards.py`, no
+  `client/public/cards/`, no `shared/cards/assets.json`, no contact sheet. The UI prints rules text and the
+  printed colour only. This is the largest remaining gap and is the next task.
+- **pnpm workspaces, Fastify, Socket.IO** (D8).
+- The leader-card hostage table and the two Spy cards' printed colours come from OCR (two independent passes);
+  they are the only rules facts with no second human-readable source.
+
+## Where things live
+
+```
+shared/src/    roles, deck, hostages, state machine, win, view, sealed, persist, intents (the wire)
+server/src/    index (boot), app (http+ws+health+rate limit), room, store (memory+SQLite), connection
+client/src/    React host screen, player screen, useGame (socket, clock offset, wake lock)
+tests/         hidden-info (the headline), win, deck, hostages, exchange, leaders, timer, server, protocol, persistence
+tools/         mutation_proof.py, wire_mutation_proof.sh, wire_leak_check.mjs, browser_check.mjs,
+               restart_check.mjs, extract_sheets.sh
+deploy/        tworooms.service (also installed to ~/.config/systemd/user/)
+docs/          PLAN.md (authoritative), RULES.md, SPEC.md, DECISIONS.md, screenshots/
+```

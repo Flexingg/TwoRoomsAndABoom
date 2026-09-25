@@ -1,7 +1,7 @@
 # Mutation proof
 
-Command: `python3 tools/mutation_proof.py` — run 2026-09-25T15:13:32Z
-Baseline: `Tests  187 passed (187)`
+Command: `python3 tools/mutation_proof.py` — run 2026-09-25T15:34:11Z
+Baseline: `Tests  206 passed (206)`
 
 Each mutation is applied to a tracked file, the single test file that should catch it is run, the real
 failure is pasted below, and the mutation is reverted with `git checkout --`. 
@@ -115,7 +115,7 @@ AssertionError: expected 'Blue Team lost. This is an acting car…' to match /Bl
  FAIL  tests/exchange.test.ts > hostage selection and exchange > the exchange actually swaps the hostages' rooms and nobody else's
 AssertionError: expected 'A' to be 'B' // Object.is equality
 ...
-   Duration  409ms (transform 69%, tests 15%, import 14%, worker 2%)
+   Duration  412ms (transform 69%, tests 15%, import 14%, worker 2%)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
  FAIL  tests/exchange.test.ts > hostage selection and exchange > the exchange actually swaps the hostages' rooms and nobody else's
 AssertionError: expected 'A' to be 'B' // Object.is equality
@@ -218,59 +218,100 @@ AssertionError: expected false to be true // Object.is equality
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
 ```
 
+## Mutation 8 — the Doctor's extra Blue condition is dropped
+
+- **File:** `shared/src/win.ts`
+- **Why it matters:** RULES.md §9: a Doctor in play means Blue also needs the President to have card shared with it, otherwise Blue loses.
+- **Test that must catch it:** `tests/win.test.ts`
+- **Result:** CAUGHT — the suite fails
+- `vitest` exit code: `1`
+
+```
+ FAIL  tests/win.test.ts > extra team conditions > Doctor: Blue loses unless the President card shared with the Doctor
+AssertionError: expected true to be false // Object.is equality
+ FAIL  tests/win.test.ts > extra team conditions > Doctor: a colour share doesn't count
+ FAIL  tests/win.test.ts > extra team conditions > Nurse carries the Doctor's responsibility when the Doctor is buried
+...
+    108|     expect(resolve(g.s).teamOutcome.blue).toBe(true);
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+ FAIL  tests/win.test.ts > pause-game announcements > Gambler: wrong call loses; “neither” is right when neither team wins
+AssertionError: expected 'lose' to be 'win' // Object.is equality
+Expected: "win"
+Received: "lose"
+ ❯ tests/win.test.ts:208:47
+    206|     toAnnouncements(neither.g);
+    207|     ok(neither.g, P(neither.id(2)), { type: "player:announce", value: …
+    208|     expect(outcome(neither.g, neither.id(2))).toBe("win");
+       |                                               ^
+    209|   });
+    210|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+```
+
+## Mutation 9 — a special role's own win condition is ignored (Agoraphobe always wins)
+
+- **File:** `shared/src/win.ts`
+- **Why it matters:** RULES.md §9: Agoraphobe wins only if it never left its initial room — the per-card objectives are as load-bearing as the base rule.
+- **Test that must catch it:** `tests/win.test.ts`
+- **Result:** CAUGHT — the suite fails
+- `vitest` exit code: `1`
+
+```
+ FAIL  tests/win.test.ts > grey objectives decided by history > Agoraphobe wins if never moved, loses once sent as a hostage
+AssertionError: expected 'win' to be 'lose' // Object.is equality
+...
+   Duration  485ms (transform 66%, tests 21%, import 12%, worker 2%)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/win.test.ts > grey objectives decided by history > Agoraphobe wins if never moved, loses once sent as a hostage
+AssertionError: expected 'win' to be 'lose' // Object.is equality
+Expected: "lose"
+Received: "win"
+ ❯ tests/win.test.ts:291:43
+    289|     playRoundEnd(moved.g, { A: [moved.id(3)], B: [moved.id(7)] });
+    290|     playRoundEnd(moved.g, { A: [moved.id(7)], B: [moved.id(3)] }); // …
+    291|     expect(outcome(moved.g, moved.id(3))).toBe("lose");
+       |                                           ^
+    292|   });
+    293|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+```
+
 ## Verdict
 
-7 mutations applied; **7 caught, 0 missed**.
+9 mutations applied; **9 caught, 0 missed** — plus the wire-level proof below, run against a real server.
 
-## Mutation 8 — `viewFor` leaks, proved end to end on the wire
+## Mutation 10 — `viewFor` leaks, proved end to end on the wire
 
-The seven mutations above are unit-level. This one is the same leak as mutation 1, but proved through the
-real server: build a leaking `dist-server`, start it on :8799, and point the independent raw-WebSocket check
-(`tools/wire_leak_check.mjs` — written by the reviewing pass, not the coding agent) at it.
+- **Files:** `shared/src/view.ts` (leak applied), `tools/wire_mutation_proof.sh`, `tools/wire_leak_check.mjs`
+- **Why it matters:** the unit test checks `viewFor`'s return value; this one checks what an independent
+  raw-WebSocket client actually *receives* from a running server, over a full scripted game.
+- **Command:** `bash tools/wire_mutation_proof.sh 8797` (builds a leaking server, runs the check, rebuilds)
+- **Result:** CAUGHT — 14 independent checks fail, and the honest server passes afterwards.
 
 ```
-$ bash tools/wire_mutation_proof.sh
-== applying the leak to shared/src/view.ts
-== rebuilding the leaking server
-== starting it on :8799
-== running the wire check against the leaking server (this MUST fail)
-
-  FAIL Ann has only its own role key on the wire (saw blue_team,red_team,president,bomber)
-  FAIL Bo has only its own role key on the wire (saw blue_team,red_team,president,bomber)
-  FAIL Cy has only its own role key on the wire (saw blue_team,red_team,president,bomber)
-  FAIL Di has only its own role key on the wire (saw blue_team,red_team,president,bomber)
-  FAIL Ed has only its own role key on the wire (saw blue_team,red_team,president,bomber)
-  FAIL Fi has only its own role key on the wire (saw blue_team,red_team,president,bomber)
-  FAIL the host learned no role keys on the deal (saw blue_team,red_team,president,bomber)
-  FAIL Cy saw exactly its own card and Ann's (saw blue_team,red_team,president,bomber)
-  FAIL Bo's frames mention no role key but its own (saw blue_team,red_team,president,bomber)
-  FAIL Di's frames mention no role key but its own (saw blue_team,red_team,president,bomber)
-  FAIL the host still learned no role keys after the private reveal
-  FAIL Bo's frames still mention no role key but its own
-  FAIL Di's frames still mention no role key but its own
-  FAIL the host screen learned no role keys through the whole sequence (saw blue_team,red_team,president,bomber)
-
 FAILED: 14
+ - Ann has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+ - Bo has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+ - Cy has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+ - Di has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+ - Ed has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+ - Fi has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+ - the host learned no role keys on the deal (saw blue_team,red_team,president,bomber)
+ - Bo saw exactly its own card and Ann's (saw blue_team,red_team,president,bomber)
+ - Di's frames mention no role key but its own (saw blue_team,red_team,president,bomber)
+ - Ed's frames mention no role key but its own (saw blue_team,red_team,president,bomber)
+ - the host still learned no role keys after the private reveal
+ - Di's frames still mention no role key but its own
+ - Ed's frames still mention no role key but its own
+ - the host screen learned no role keys through the whole sequence (saw blue_team,red_team,president,bomber)
+
 wire check exit code: 1
 caught: the wire check fails when viewFor leaks.
+== rebuilding the honest server
 ```
 
-Every client *and the host screen* came back holding all four role keys of the other players
-(`blue_team,red_team,president,bomber`), which is exactly the failure the cardinal rule forbids. The script
-then reverts `view.ts` and rebuilds, so the deployed service is unaffected.
+### Verdict (all ten)
 
-## Verdict (all eight)
-
-| # | Mutation | Caught by |
-|---|----------|-----------|
-| 1 | `viewFor` leaks every role into the roster | `tests/hidden-info.test.ts` |
-| 2 | `hostageCount` returns a constant | `tests/hostages.test.ts` |
-| 3 | President/Bomber rule inverted | `tests/win.test.ts` |
-| 4 | The exchange moves nobody | `tests/exchange.test.ts` |
-| 5 | The leader may select itself | `tests/exchange.test.ts` |
-| 6 | One vote usurps instead of a majority | `tests/leaders.test.ts` |
-| 7 | The round timer never expires | `tests/timer.test.ts` |
-| 8 | The same leak as #1, on the wire | `tools/wire_leak_check.mjs` |
-
-7 of 7 unit mutations caught by `python3 tools/mutation_proof.py`; the wire mutation caught by
-`bash tools/wire_mutation_proof.sh`. **0 missed.**
+10 mutations applied; **10 caught, 0 missed**. The conformed code (Zod intents, `clock`/`share:incoming`
+events, rate limiting, SQLite persistence) passes all ten, so none of the new transport or storage work
+narrowed the hidden-information boundary or the win resolution.

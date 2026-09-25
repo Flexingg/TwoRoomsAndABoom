@@ -157,12 +157,60 @@ to settle the 11–13-player band where the card and the rulebook disagree.
 ## Verification
 
 ```bash
-npm test                                  # 187 tests, 8 files
-python3 tools/mutation_proof.py           # break a rule, watch the test catch it  (7/7 caught)
+npm test                                  # 206 tests, 10 files
+python3 tools/mutation_proof.py           # break a rule, watch the test catch it  (9/9 caught)
+bash tools/wire_mutation_proof.sh         # ...and the wire check fails against a leaking build
 node tools/browser_check.mjs              # a real Chromium: host + 7 phones play a whole game
 node tools/browser_check.mjs --attach --port 8790   # the same, against the running service
+node tools/restart_check.mjs --port 8790            # kill the service mid-round; every seat comes back
 node tools/wire_leak_check.mjs --port 8790          # raw WebSocket: a reveal leaks only to its two parties
-bash tools/wire_mutation_proof.sh                   # ...and that check fails against a leaking build
 ```
 
-`MUTATION_PROOF.md` holds the real failing output for all eight mutations.
+`MUTATION_PROOF.md` holds the real failing output for all ten mutations, including the wire-level one.
+
+## The wire protocol
+
+Phones send small intents; the server replies with a full, personalised view. Every inbound frame is
+Zod-validated in `shared/src/intents.ts` before it reaches the engine — nothing else in the server parses
+JSON, and nothing else can reach a socket except `viewFor()`.
+
+| Phone → server | Server → phone |
+| --- | --- |
+| `game:create`, `game:join`, `game:resume` | `view` — this socket's own filtered state, after every change |
+| `host:configure`, `host:start`, `host:kick`, `host:lockCode` | `clock` — the server's epoch ms, on connect and every 30 s |
+| `leader:appoint`, `leader:offer`, `leader:respond`, `usurp:vote` | `share:incoming` — "so-and-so wants to share" |
+| `hostages:lock`, `share:request`, `share:respond`, `power:use`, `gambler:predict` | |
+
+The plan's table names the intents a phone sends; the host's round plumbing (`host:startRound`,
+`host:exchange`, `host:assignRooms`, …) travels under the engine's own action names, validated by the same
+schemas. `clock` and `share:incoming` are deliberately incapable of carrying state: a test asserts an event
+frame contains nothing but the handful of keys the protocol allows, so an event can never become a side
+channel for a role.
+
+**Timer sync:** the server sends `roundEndsAt` as an absolute timestamp and each phone estimates its clock
+offset from `clock`, so every phone counts down locally and they all hit zero together without per-second
+traffic. Phones hold a Screen Wake Lock while a round is live.
+
+## Data and persistence
+
+Game state lives in memory for speed and is snapshotted to SQLite (`better-sqlite3`) after every successful
+action, so a restart mid-game loses nothing — `node tools/restart_check.mjs` proves it against the running
+service: six phones keep their card, their room and their countdown across a real `systemctl --user restart`.
+Sessions reload unfinished games on boot. Finished games are kept 24 h for the recap, then deleted; abandoned
+games with nobody attached go after 12 h. `data/games.db` holds **role assignments in the clear** — it is
+server-side-only like memory is, is git-ignored, is never served, and is excluded from the Docker image.
+
+`GET /api/health` returns `{ ok, games, players, gamesTotal, uptimeSec }` — point an uptime checker at it.
+`GET /healthz` is a plain `ok` liveness route.
+
+## Not done yet (honest list)
+
+- **Card art.** The UI prints role text and the printed colour; it does not yet use the print-and-play
+  artwork. `tools/assets/extract_cards.py` (the extraction pipeline the plan describes: 4×2 grid detection,
+  upright rotation, team-bar crops, WebP + manifest + contact sheet) is the next piece of work.
+- **pnpm workspaces, Fastify and Socket.IO.** The plan names them; the repo uses npm, `node:http` and `ws`.
+  Same process, same one-port shape, same reconnect guarantees — see `docs/DECISIONS.md` D8 for the two that
+  are still open.
+- The two Spy cards' printed colour and the leader-card hostage table are recorded from OCR (two independent
+  passes); they are the only facts in the rules write-up with no second human-readable source.
+
