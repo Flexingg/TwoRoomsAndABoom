@@ -1,22 +1,26 @@
 # STATUS — Two Rooms and a Boom app
 
-Last updated: 2026-09-25 13:20 EDT (card art)
+Last updated: 2026-09-25 13:50 EDT (pre-game pages)
 
 ## TL;DR
 
 The app runs on this machine as a systemd user service and has been driven end to end in a **real browser**
-(host screen + 7 phones, three rounds, exchanges, reveal). **The cards are now the publisher's own cards**:
+(host screen + 7 phones, three rounds, exchanges, reveal). **The cards are the publisher's own cards**:
 98 of them, cut out of `printable_files/` locally, with the flip/share/colour-share/leader-card behaviour the
-plan asks for. `docs/PLAN.md` is the architecture the code follows, except for two named items (pnpm
-workspaces, Fastify/Socket.IO) which are listed below as open rather than pretended.
+plan asks for. **There are now two pre-game pages** — a How to Play guide and a Roles Explorer — reachable
+from both landing screens with no session and no room code, and a test proves they cannot drift from the
+roles the engine actually deals. `docs/PLAN.md` is the architecture the code follows, except for two named
+items (pnpm workspaces, Fastify/Socket.IO) which are listed below as open rather than pretended.
 
 - **Host screen:** http://192.168.1.146:8790/ · **Join screen:** http://192.168.1.146:8790/play
+- **Pre-game pages:** http://192.168.1.146:8790/how-to-play · http://192.168.1.146:8790/roles
 - **Service:** `systemctl --user status tworooms` (enabled, `0.0.0.0`, logs `~/.hermes/logs/tworooms.log`)
-- **Suite:** `npm test` → **216 tests, 11 files, all green** (includes `tests/card-art.test.ts`)
-- **Mutations:** `python3 tools/mutation_proof.py` → **11/11 caught** (two of them card art);
-  `bash tools/wire_mutation_proof.sh` → the wire check fails against a leaking build (**12th, caught**).
-  Real output in `MUTATION_PROOF.md`.
-- **Browser E2E:** `node tools/browser_check.mjs --attach --port 8790` → PASS (245 frames leak-scanned)
+- **Suite:** `npm test` → **230 tests, 12 files, all green** (includes `tests/guide.test.ts`)
+- **Mutations:** `python3 tools/mutation_proof.py` → **14/14 caught** (three of them the new drift/numbers
+  checks); `bash tools/wire_mutation_proof.sh` → the wire check fails against a leaking build (**15th,
+  caught**). Real output in `MUTATION_PROOF.md`.
+- **Browser E2E:** `node tools/pregame_check.mjs` → PASS (both new pages, 44 assertions);
+  `node tools/browser_check.mjs --attach --port 8790` → PASS (7 phones, 3 rounds, 245 frames leak-scanned)
 - **Restart E2E:** `node tools/restart_check.mjs --port 8790` → PASS (6/6 seats survive a real restart)
 - **Card art E2E:** `node tools/card_art_check.mjs --attach --port 8790` → **PASS** against the deployed
   service. 12 phones (a colour share needs more than 10 players): press-and-hold flips the card and release
@@ -24,9 +28,46 @@ workspaces, Fastify/Socket.IO) which are listed below as open rather than preten
   showed only the printed bar in that card's own colour, the leader's phone showed the leader card with
   "round 1 of 3 · 1 hostage · 11–13 players", and the host screen showed the chart for the round.
   Screenshots in `docs/screenshots/card-art/`.
-- **Nothing regressed:** `node tools/browser_check.mjs --attach --port 8790` → PASS after the card art landed
-  (7 phones, 3 rounds, 245 frames leak-scanned, BLUE TEAM WINS). Its card-reading step now press-and-holds
-  the card and reads the role off the art, since tapping to look is gone.
+
+## Pre-game pages (this pass)
+
+Two pages, both reachable **before** joining or creating a game — from the host landing screen (`/`) and from
+the join screen (`/play`) — with no session, no room code and no login. Mobile-first, built for a group
+standing around each on their own phone; no horizontal scroll at 360 px (asserted in the browser check).
+
+- **How to Play** (`/how-to-play`) — premise (two teams, President/Bomber), how each side wins stated as the
+  same-room/different-room question, the two rooms and their leaders (appoint/abdicate/usurp), the round
+  structure with each round's length, the five steps that end a round in order, a dedicated hostage-exchange
+  section (who chooses, who goes, finality, the parley), the basic rules on what a player may say and may not
+  say, when shares are allowed, and a ten-item list of new-player mistakes. The hostage chart is rendered for
+  both the 3-round and 5-round formats.
+- **Roles Explorer** (`/roles`) — **all 98 role keys** the engine can deal (73 distinct role names; red/blue
+  printings are separate cards). Each role shows name, alignment (Red/Blue/Grey-with-its-own-objective/Green
+  Team Zombie), power, how it wins, the player counts it needs or suits, and a plain-language "what to do"
+  line. Search by name, filter by team, and filter by player count band (6–10, 11–13, 14–17, 18–21, 22+);
+  tapping a role opens its detail view with the publisher's card face.
+- **Text-first, art in the detail view only** (DECISIONS D19). All art is the locally cut WebP from
+  `printable_files/` — the page has no network path for images.
+- **Where the rulebook is silent, the page says so** (DECISIONS D20): no leader at timer end, a leader who
+  disconnects, "discussion time"/no turns, how long the parley lasts. Where two printed sources disagree
+  (the 11–13 hostage number) the page states which one the app follows.
+
+## No drift between the guide and the engine (DECISIONS D18)
+
+- `shared/src/guide.ts` is the one definition both pages read. Every number on the How to Play page — rounds,
+  round lengths, team sizes, the hostage chart, the 5-round gate, the colour-share threshold — is computed
+  from `shared/src/hostages.ts`; nothing is typed twice.
+- `tests/guide.test.ts` asserts **both directions** (every engine role has an explorer entry; every explorer
+  entry exists in the engine), that a real `buildDeck` sweep over every non-core role is fully covered, and
+  that the page's numbers match the engine *and* the rulebook's printed table — with exactly one known
+  disagreement required to be present and recorded (**11–13 players**, rulebook p.7 says 2 hostages in the
+  3-minute round, the leader card and the engine say 1). It also pins the no-turns and no-discussion-time
+  point so the page cannot quietly grow a house rule.
+- **Mutation-proved:** mutation 12 adds a role to the engine only → caught; mutation 13 adds a role to the
+  explorer only → caught; mutation 14 stops the page's hostage chart being derived from the engine → caught.
+  Real failure output in `MUTATION_PROOF.md`. The previously proven guarantees (hidden-information property,
+  win conditions, the wire-level leak check) are unchanged and still green.
+
 
 ## Card art — how it works and what was verified
 

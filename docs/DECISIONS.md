@@ -159,3 +159,47 @@ only roles whose printed colour deliberately differs from the engine's.
 no team colour on that face to sample. Recording it as an exception beats either inventing a colour or
 letting the test fail silently.
 **Source:** RULES.md §9 (Drunk); the PnP sheet's "????" team bar.
+
+## Pre-game pages (How to Play + Roles Explorer)
+
+### D18. One shared definition, and a two-way drift test
+
+**Choice:** the two pages render from a single new module, `shared/src/guide.ts`. It holds the rules prose
+and `ROLE_GUIDE` — one authored `whatToDo` line per role key, listed explicitly — and derives every number
+from the engine (`shared/src/hostages.ts`). `ROLE_GUIDE` is deliberately *not* generated from `ROLES`: an
+explicit list is what lets `tests/guide.test.ts` fail. The test asserts both directions (engine key → guide
+entry, guide entry → engine key), that a real `buildDeck` sweep over every non-core role is fully covered,
+and that the page's hostage chart, round lengths, round counts and team sizes are the engine's own.
+**Reasoning:** the owner asked for a Roles Explorer that cannot disagree with the cards the engine deals.
+Importing the catalogue directly would make the property true by construction and untestable; two lists plus
+a test is the version that can actually catch a mistake. Mutation 12 (role added to the engine only) and
+mutation 13 (role added to the explorer only) both fail the test, and mutation 14 (hostage chart stops being
+derived) fails the numbers half. See `MUTATION_PROOF.md`.
+**Source:** the owner's brief, step 2; verified by `tests/guide.test.ts`.
+
+### D19. Text-first, with the art only in a role's detail view
+
+**Choice:** the Roles Explorer is text-first. Every role shows its name, alignment, power, win condition and
+`whatToDo` as text; the publisher's card face appears only once a role's row is opened. All art comes from
+`shared/cards/assets.json` / `client/public/cards/`, i.e. the WebP cut from the local print-and-play sheets
+(D11, D16) — nothing is fetched from the internet.
+**Reasoning:** the page is read by a group standing in a room, one-handed on a phone; 98 card images at the
+top level would make it unscannable, and the text is what a player actually needs at the table. The art is
+still one tap away, because recognising the printed card is how a player confirms what they hold.
+
+### D20. Where the brief and the rulebook disagree, the rulebook wins and the page says so
+
+**Choice:** three conflicts are handled on the page rather than silently resolved:
+
+1. **"Discussion time" and "on your turn"** — the brief asks for both. The rulebook has neither: there is no
+   turn order, and the round timer *is* the discussion time. The How to Play page says so in the round
+   section (`YOUR_ROUND`, "There are no turns and nothing to tap").
+2. **The 11–13 hostage number** — the rulebook's p.7 chart lumps 11–21 players and says 2 hostages in the
+   3-minute round; the leader card says 1 for 11–13. The engine follows the leader card (D1) and the page
+   prints the engine's number, with the disagreement called out under "Unclear in the rules". The test
+   asserts that exactly one printed-vs-engine disagreement exists and that it is this one.
+3. **A room with no leader when the timer ends** (plus a leader who disconnects) — the rulebook is silent;
+   the app's 30-second appoint prompt is listed on the page as an app decision, not a rule.
+**Reasoning:** a pre-game guide is exactly where an invented house rule would get mistaken for the printed
+rules. Anything the rulebook leaves open is labelled as open.
+**Source:** rulebook v3 §2–§5, §7; lead card chart; PLAN.md "App decisions".

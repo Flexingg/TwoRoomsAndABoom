@@ -1,7 +1,7 @@
 # Mutation proof
 
-Command: `python3 tools/mutation_proof.py` — run 2026-09-25T17:15:47Z
-Baseline: `Tests  216 passed (216)`
+Command: `python3 tools/mutation_proof.py` — run 2026-09-25T17:39:06Z
+Baseline: `Tests  230 passed (230)`
 
 Each mutation is applied to a tracked file, the single test file that should catch it is run, the real
 failure is pasted below, and the mutation is reverted with `git checkout --`. 
@@ -115,7 +115,7 @@ AssertionError: expected 'Blue Team lost. This is an acting car…' to match /Bl
  FAIL  tests/exchange.test.ts > hostage selection and exchange > the exchange actually swaps the hostages' rooms and nobody else's
 AssertionError: expected 'A' to be 'B' // Object.is equality
 ...
-   Duration  410ms (transform 69%, tests 15%, import 14%, worker 2%)
+   Duration  411ms (transform 70%, tests 14%, import 13%, worker 2%)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
  FAIL  tests/exchange.test.ts > hostage selection and exchange > the exchange actually swaps the hostages' rooms and nobody else's
 AssertionError: expected 'A' to be 'B' // Object.is equality
@@ -260,7 +260,7 @@ Received: "lose"
  FAIL  tests/win.test.ts > grey objectives decided by history > Agoraphobe wins if never moved, loses once sent as a hostage
 AssertionError: expected 'win' to be 'lose' // Object.is equality
 ...
-   Duration  477ms (transform 64%, tests 22%, import 12%, worker 2%)
+   Duration  478ms (transform 65%, tests 22%, import 12%, worker 2%)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
  FAIL  tests/win.test.ts > grey objectives decided by history > Agoraphobe wins if never moved, loses once sent as a hostage
 AssertionError: expected 'win' to be 'lose' // Object.is equality
@@ -336,6 +336,98 @@ AssertionError: expected [ Array(1) ] to deeply equal []
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
 ```
 
+## Mutation 12 — a role is added to the engine and not to the Roles Explorer
+
+- **File:** `shared/src/roles.ts`
+- **Why it matters:** the drift test's engine -> explorer direction: a role the engine can deal that the explorer has no entry for is a card a player can be holding with no way to look it up.
+- **Test that must catch it:** `tests/guide.test.ts`
+- **Result:** CAUGHT — the suite fails
+- `vitest` exit code: `1`
+
+```
+ FAIL  tests/guide.test.ts > Roles Explorer vs the engine — no drift, both directions > every role the engine deals is in the explorer
+AssertionError: roles in the engine with no explorer entry: guide_test_ghost: expected [ 'guide_test_ghost' ] to deeply equal []
+ FAIL  tests/guide.test.ts > Roles Explorer vs the engine — no drift, both directions > the two key lists are exactly equal, and cover every card the catalogue defines
+AssertionError: expected [ 'agent_blue', 'agent_red', …(96) ] to deeply equal [ 'agent_blue', 'agent_red', …(97) ]
+ FAIL  tests/guide.test.ts > Roles Explorer vs the engine — no drift, both directions > every explorer entry carries a real 'what to do' line and a player-count note
+Error: role guide_test_ghost has no entry in ROLE_GUIDE
+...
+- Expected
++ Received
+- []
++ [
++   "guide_test_ghost",
++ ]
+ ❯ tests/guide.test.ts:145:89
+    143|
+    144|     const uncovered = [...dealt].filter((k) => !covered.has(k));
+    145|     expect(uncovered, `dealt roles missing from the explorer: ${uncove…
+       |                                                                                         ^
+    146|     // And the sweep really did exercise most of the catalogue.
+    147|     expect(dealt.size).toBeGreaterThan(80);
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+```
+
+## Mutation 13 — a role is added to the Roles Explorer and not to the engine
+
+- **File:** `shared/src/guide.ts`
+- **Why it matters:** the drift test's explorer -> engine direction: an explorer entry for a card that does not exist would send players off to bluff about a role nobody is holding.
+- **Test that must catch it:** `tests/guide.test.ts`
+- **Result:** CAUGHT — the suite fails
+- `vitest` exit code: `1`
+
+```
+ FAIL  tests/guide.test.ts > Roles Explorer vs the engine — no drift, both directions > every role in the explorer exists in the engine
+AssertionError: explorer entries with no engine role: guide_test_ghost: expected [ 'guide_test_ghost' ] to deeply equal []
+ FAIL  tests/guide.test.ts > Roles Explorer vs the engine — no drift, both directions > the two key lists are exactly equal, and cover every card the catalogue defines
+AssertionError: expected [ 'agent_blue', 'agent_red', …(97) ] to deeply equal [ 'agent_blue', 'agent_red', …(96) ]
+...
++   "guide_test_ghost",
+    "hot_potato",
+    "immunologist",
+    "intern",
+    "invincible",
+    "juliet",
+ ❯ tests/guide.test.ts:67:37
+     65|
+     66|   it("the two key lists are exactly equal, and cover every card the ca…
+     67|     expect(sorted(GUIDE_ROLE_KEYS)).toEqual(sorted(engineRoleKeys()));
+       |                                     ^
+     68|     expect(explorerEntries()).toHaveLength(ROLES.length);
+     69|   });
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+```
+
+## Mutation 14 — the hostage chart on the How to Play page stops being the engine's chart
+
+- **File:** `shared/src/guide.ts`
+- **Why it matters:** the page's numbers are read from shared/src/hostages.ts: if the page can print a hostage count the engine does not use, the guide becomes a second, contradictory rulebook.
+- **Test that must catch it:** `tests/guide.test.ts`
+- **Result:** CAUGHT — the suite fails
+- `vitest` exit code: `1`
+
+```
+ FAIL  tests/guide.test.ts > How to Play numbers come from the engine, not from prose > every hostage number on the page is hostageCount() for that band and round
+AssertionError: 14–17 players basic: expected [ 1, 1, 1 ] to deeply equal [ 2, 1, 1 ]
+ FAIL  tests/guide.test.ts > How to Play numbers come from the engine, not from prose > agrees with the rulebook's printed p.7 table everywhere except the one documented disagreement
+AssertionError: expected [ { …(3) }, { …(3) }, { …(3) }, …(2) ] to have a length of 1 but got 5
+...
+ FAIL  tests/guide.test.ts > How to Play numbers come from the engine, not from prose > agrees with the rulebook's printed p.7 table everywhere except the one documented disagreement
+AssertionError: expected [ { …(3) }, { …(3) }, { …(3) }, …(2) ] to have a length of 1 but got 5
+- Expected
++ Received
+- 1
++ 5
+ ❯ tests/guide.test.ts:196:27
+    194|
+    195|     // Exactly the known one: 11-13 players, 3-minute round (rulebook …
+    196|     expect(disagreements).toHaveLength(1);
+       |                           ^
+    197|     expect(disagreements[0]).toMatchObject({ where: "11–13 players · r…
+    198|     // ...and it is recorded on the page, not hidden.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+```
+
 ## Verdict
 
-11 mutations applied; **11 caught, 0 missed**.
+14 mutations applied; **14 caught, 0 missed**.

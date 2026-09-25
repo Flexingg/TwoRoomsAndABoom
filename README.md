@@ -56,6 +56,26 @@ systemctl --user restart tworooms       # after `npm run build`
 Deployed here at **http://192.168.1.146:8790/** (host screen) — that is the URL to open on the table screen.
 Also reachable as http://hermes-pc.local:8790/ depending on the network.
 
+## Before you start: the two pre-game pages
+
+Both are open to anyone on the network, with **no session, no room code and no login**, so a group can read
+them on their own phones while they wait. They are linked from the host landing screen (`/`) and from the
+join screen (`/play`).
+
+- **`/how-to-play`** — the rules as a new player needs them: the premise, the same-room/different-room win
+  condition, the leaders, the round structure and each round's length, the five steps that end a round, the
+  hostage exchange (who chooses, who goes, what is final), what you may and may not say, and the mistakes new
+  players make. Anything the rulebook leaves open is labelled as open, and where two printed sources disagree
+  the page says which one the app follows.
+- **`/roles`** — all 98 role cards the engine can deal (73 distinct names; red and blue printings are separate
+  cards). Each one shows its alignment, its power, how it wins, the player counts it suits, and a plain
+  "what to do" line. Search by name, filter by team and by player count; tap a role for its detail view and
+  the publisher's card face.
+
+Both pages read one module, `shared/src/guide.ts`, and every number on the How to Play page is computed from
+the engine's own constants in `shared/src/hostages.ts`. `tests/guide.test.ts` proves the Roles Explorer and
+the engine's catalogue agree in both directions — add a role to one side only and the suite fails.
+
 ## Running a game night
 
 **One screen on the table (a laptop or tablet):**
@@ -195,11 +215,13 @@ to settle the 11–13-player band where the card and the rulebook disagree.
 ## Verification
 
 ```bash
-npm test                                  # 216 tests, 11 files
-python3 tools/mutation_proof.py           # break a rule, watch the test catch it  (11/11 caught)
+npm test                                  # 230 tests, 12 files
+python3 tools/mutation_proof.py           # break a rule, watch the test catch it  (14/14 caught)
 bash tools/wire_mutation_proof.sh         # ...and the wire check fails against a leaking build
 node tools/browser_check.mjs              # a real Chromium: host + 7 phones play a whole game
 node tools/browser_check.mjs --attach --port 8790   # the same, against the running service
+node tools/pregame_check.mjs                        # /how-to-play and /roles: render, search, filter
+node tools/pregame_check.mjs --port 8799            # the same, against a server you spawned yourself
 node tools/card_art_check.mjs --port 8799           # 12 phones: hold-to-flip, card share, colour share,
                                                     # the leader card — against the real built client
 node tools/card_art_check.mjs --attach --port 8790  # the same, against the running service
