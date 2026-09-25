@@ -19,7 +19,7 @@ items (pnpm workspaces, Fastify/Socket.IO) which are listed below as open rather
 - **Mutations:** `python3 tools/mutation_proof.py` → **14/14 caught** (three of them the new drift/numbers
   checks); `bash tools/wire_mutation_proof.sh` → the wire check fails against a leaking build (**15th,
   caught**). Real output in `MUTATION_PROOF.md`.
-- **Browser E2E:** `node tools/pregame_check.mjs` → PASS (both new pages, 44 assertions);
+- **Browser E2E:** `node tools/pregame_check.mjs` → PASS (both new pages, 46 assertions);
   `node tools/browser_check.mjs --attach --port 8790` → PASS (7 phones, 3 rounds, 245 frames leak-scanned)
 - **Restart E2E:** `node tools/restart_check.mjs --port 8790` → PASS (6/6 seats survive a real restart)
 - **Card art E2E:** `node tools/card_art_check.mjs --attach --port 8790` → **PASS** against the deployed
