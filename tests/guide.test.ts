@@ -12,7 +12,8 @@
 
 import { describe, expect, it } from "vitest";
 import { buildDeck, DeckError, planDeck, type DeckOptions } from "../shared/src/deck.js";
-import { getRole, ROLES } from "../shared/src/roles.js";
+import { getRole, PSYCH_CONDITIONS, ROLES } from "../shared/src/roles.js";
+import { ENGINE_INTENT_TYPES } from "../shared/src/intents.js";
 import { seededRng } from "../shared/src/rng.js";
 import {
   ADVANCED_ROUNDS,
@@ -29,6 +30,7 @@ import {
   EXCHANGE,
   GUIDE_ROLE_KEYS,
   HOSTAGE_BANDS,
+  LEADERS,
   NEW_PLAYER_MISTAKES,
   PREMISE,
   ROLE_GUIDE,
@@ -263,5 +265,127 @@ describe("the player-count filter is the Character Guide's own advice", () => {
     expect(inBand("private_eye", 11, 13)).toBe(false);
     // And the bands themselves are the engine's bands.
     expect(RULES_FACTS.bands.map((b) => [b.min, b.max])).toEqual([...PLAYER_BANDS.map((b) => [b.min, b.max])]);
+  });
+});
+
+// The review pass: rule facts the drift checks above cannot see, pinned against the Character Guide v3 /
+// rulebook v3 wording and, wherever possible, against the engine's own catalogue rather than the page.
+describe("the written rules say what the printed cards and the engine say", () => {
+  const todo = (k: string) => ROLE_GUIDE[k].whatToDo;
+  const allProse = (): string[] => [
+    PREMISE,
+    ...Object.values(WIN_CONDITION),
+    LEADERS.what,
+    LEADERS.appoint,
+    LEADERS.hostageCount,
+    ...LEADERS.change.map((x) => x.body),
+    ...EXCHANGE.map((x) => x.body),
+    ROUND_STRUCTURE.summary,
+    ROUND_STRUCTURE.advanced,
+    ...ROUND_STRUCTURE.endSteps,
+    ...BASIC_RULES.map((x) => x.body),
+    ...YOUR_ROUND.map((x) => x.body),
+    ...NEW_PLAYER_MISTAKES,
+    ...RULEBOOK_OPEN.map((x) => x.body),
+  ];
+
+  it("every colour-share player threshold in the prose is the engine's own number", () => {
+    const n = RULES_FACTS.colorShareMinPlayers;
+    const found: string[] = [];
+    for (const t of allProse()) {
+      for (const m of t.matchAll(/more than (\d+) players|(\d+) or fewer players|below (\d+) players/gi)) {
+        found.push(m[0]);
+        const v = Number(m[1] ?? m[2] ?? m[3]);
+        expect(v, `"${m[0]}" is not derived from colorShareMinPlayers (${n})`).toBe(m[3] ? n : n - 1);
+      }
+    }
+    expect(found.length, "the colour-share threshold is stated on the page").toBeGreaterThanOrEqual(3);
+  });
+
+  it("the timer comes before the exchange in the rulebook, and the app's different order is labelled as the app's", () => {
+    // Rulebook p.9: 3. Leaders begin timer for the next round. 4. Exchange hostages.
+    expect(ROUND_STRUCTURE.endSteps[2]).toMatch(/timer/i);
+    expect(ROUND_STRUCTURE.endSteps[3]).toMatch(/exchanged/i);
+    for (const t of allProse()) expect(t, "the app's timer order is not the rulebook's").not.toMatch(/rulebook's own (step )?order/i);
+    const appOrder = [...EXCHANGE, ...RULEBOOK_OPEN].filter((x) => /at the exchange/i.test(x.body));
+    expect(appOrder.length).toBeGreaterThanOrEqual(1);
+    for (const x of appOrder) expect(x.body, x.title).toMatch(/this app|app decision/i);
+  });
+
+  it("the 'open in the rules' notes only describe what the app actually does", () => {
+    // Nothing lets the host (or anyone but the leader) pick hostages, and nothing auto-appoints a leader.
+    expect(ENGINE_INTENT_TYPES.filter((t) => /^host:.*hostage/i.test(t))).toEqual([]);
+    const open = RULEBOOK_OPEN.map((x) => x.body).join(" ");
+    expect(open).not.toMatch(/on their behalf|random eligible|30 seconds/i);
+  });
+
+  it("usurping is the printed rule only — no invented extras", () => {
+    const usurp = LEADERS.change.find((x) => /usurp/i.test(x.title))!.body;
+    expect(usurp).toMatch(/more than half/i);
+    expect(usurp).not.toMatch(/pointing stops/i);
+  });
+
+  // Each row: the card's line must keep what the printed card says (Character Guide v3), and must not
+  // say what it doesn't.
+  const CARD_FACTS: [string, RegExp[], RegExp[]][] = [
+    // "you are on Red Team ... wins if the President gains 'dead'" — decided after the last exchange.
+    ["red_team", [/after the last exchange/i], [/before the last exchange/i]],
+    // BOUNCER: "does not work during the last round or between rounds".
+    ["bouncer_red", [/last round/i, /between rounds/i], []],
+    // CONMAN: "private reveal instead. They must private reveal their card too." — not a card share.
+    ["conman_red", [/privately reveal/i], [/card share/i]],
+    // CRIMINAL gives "shy" (no part of the card), not silence ("cursed" is the Mummy's).
+    ["criminal_red", [/“shy”/, /any part/i], [/silent/i]],
+    // MAYOR: "counts as 2 votes instead of 1 unless the opposing Mayor also publicly reveals".
+    ["mayor_red", [/double/i, /other Mayor/i], []],
+    // "paranoid": "may only card share. Moreover, they may only card share once per game."
+    ["paranoid_red", [/only card share/i, /once/i], []],
+    // USURPER: "your card must permanently remain publicly revealed".
+    ["usurper_red", [/publicly reveal/i, /rest of the game/i, /but the last/i], []],
+    // CUPID / ERIS: the new objective REPLACES the original one.
+    ["cupid", [/replaces/i, /same room/i], []],
+    ["eris", [/replaces/i, /opposite rooms/i], []],
+    // Leprechaun: "At the end of the game, the Leprechaun wins" — the holder, not whoever held it once.
+    ["leprechaun", [/holds the Leprechaun at the end wins/i, /“foolish”/], [/either way/i, /hand the card/i]],
+    // Hot Potato: "The Hot Potato loses at the end of the game."
+    ["hot_potato", [/lose/i], [/\bwin\b/i]],
+    // Doctor / Engineer: an additional win condition for the WHOLE team.
+    ["doctor", [/President/, /whole Blue Team loses/i], []],
+    ["engineer", [/Bomber/, /whole Red Team loses/i], []],
+    // BOOM never works on the President's Daughter; HUG never works on the Martyr.
+    ["dr_boom", [/President's Daughter/], []],
+    ["tuesday_knight", [/Martyr/, /except the President/i], []],
+    // Invincible: immune "without exception", cannot be played with the Zombie.
+    ["invincible", [/without exception/i, /Zombie/], []],
+    ["immunologist", [/immune/i], [/without exception/i]],
+    // Drunk: trades "at the beginning of the last round"; forgetting loses.
+    ["drunk", [/start of the last round/i, /lose/i], []],
+    // Ambassador: never part of a room's population.
+    ["ambassador_red", [/cannot vote, lead, be a hostage or be targeted/i], []],
+  ];
+
+  it.each(CARD_FACTS)("%s keeps the printed card's rule", (key, must, mustNot) => {
+    for (const re of must) expect(todo(key), `${key} should match ${re}`).toMatch(re);
+    for (const re of mustNot) expect(todo(key), `${key} should not match ${re}`).not.toMatch(re);
+  });
+
+  it("the Spy lines name the allegiance and the opposite printed colour, from the engine's own fields", () => {
+    for (const key of ["spy_red", "spy_blue"]) {
+      const r = getRole(key);
+      expect(r.cardColor).not.toBe(r.team);
+      expect(todo(key)).toMatch(new RegExp(`on the ${r.team.toUpperCase()} team`));
+      expect(todo(key)).toMatch(new RegExp(`printed ${r.cardColor.toUpperCase()}`));
+    }
+  });
+
+  it("the Psychologist line names exactly the engine's psych conditions", () => {
+    for (const c of PSYCH_CONDITIONS) expect(todo("psychologist_red")).toMatch(new RegExp(`\\b${c}\\b`));
+  });
+
+  it("every backup card's line names the card it backs up and says it only matters when that card is buried", () => {
+    for (const r of ROLES.filter((x) => x.backupFor)) {
+      expect(todo(r.key), r.key).toMatch(new RegExp(getRole(r.backupFor!).name));
+      expect(todo(r.key), r.key).toMatch(/buried/i);
+    }
   });
 });

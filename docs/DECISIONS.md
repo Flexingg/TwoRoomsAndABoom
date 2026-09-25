@@ -199,7 +199,9 @@ still one tap away, because recognising the printed card is how a player confirm
    prints the engine's number, with the disagreement called out under "Unclear in the rules". The test
    asserts that exactly one printed-vs-engine disagreement exists and that it is this one.
 3. **A room with no leader when the timer ends** (plus a leader who disconnects) — the rulebook is silent;
-   the app's 30-second appoint prompt is listed on the page as an app decision, not a rule.
+   the page says what the app actually does — the round waits for a player in the room to appoint a leader, and a
+   disconnected leader can only be replaced by usurpation — and labels it an app decision, not a rule. (PLAN.md's
+   30-second random-leader fallback and host pick-on-behalf were never implemented; the page used to claim them.)
 **Reasoning:** a pre-game guide is exactly where an invented house rule would get mistaken for the printed
 rules. Anything the rulebook leaves open is labelled as open.
 **Source:** rulebook v3 §2–§5, §7; lead card chart; PLAN.md "App decisions".

@@ -107,7 +107,7 @@ export const LEADERS = {
     },
     {
       title: "Usurpation",
-      body: "Raise one hand high so everyone can see, and point the other at the player you want as leader — yourself included. The moment more than half the room points at the same player, that player takes the leader card and all pointing stops.",
+      body: "Raise one hand high so everyone can see, and point the other at the player you want as leader — yourself included. The moment more than half the room points at the same player, that player becomes the leader and takes the leader card.",
     },
   ] as RuleItem[],
   hostageCount:
@@ -138,7 +138,7 @@ export const EXCHANGE: RuleItem[] = [
   {
     title: "Then the clock",
     body:
-      "The next round's timer starts when the hostages are exchanged — the rulebook's own order. On the last round there is no next timer: the game simply ends.",
+      "In the rulebook the leaders start the next round's timer just before the hostages cross (step 3, then step 4). This app starts it at the exchange itself, so every phone's countdown begins as the hostages move. On the last round there is no next timer: the game simply ends.",
   },
 ];
 
@@ -158,7 +158,7 @@ export const ROUND_STRUCTURE = {
     "The two leaders parley — they meet between the rooms, without the hostages. This is so neither leader is influenced by seeing who the other room is sending.",
     "The leaders start the next round's timer. On the last round, skip this.",
     "The hostages are exchanged: the same number walks out of each room and into the other.",
-    "Everyone returns to their room and the next round begins. After the last exchange the game ends instead.",
+    "Everyone returns to their room. After the last exchange the game ends instead.",
   ],
 };
 
@@ -177,7 +177,7 @@ export const BASIC_RULES: RuleItem[] = [
   },
   {
     title: "Keep your card",
-    body: "You may show your card to nobody, somebody or everybody — but you may never swap cards with another player, and a reveal has to show the whole card. You cannot show just the colour (advanced games with more than 10 players relax exactly that one point, if your group is playing colour shares).",
+    body: `You may show your card to nobody, somebody or everybody — but you may never swap cards with another player, and a reveal has to show the whole card. You cannot show just the colour (advanced games with more than ${RULES_FACTS.colorShareMinPlayers - 1} players relax exactly that one point, if your group is playing colour shares).`,
   },
   {
     title: "Leaders and hostages have extra rules",
@@ -196,7 +196,7 @@ export const YOUR_ROUND: RuleItem[] = [
   {
     title: "Sharing",
     body:
-      "A card share is two phones showing each other the whole card. A colour share shows only the team bar and is only allowed in an advanced game with more than 10 players. " +
+      `A card share is two phones showing each other the whole card. A colour share shows only the team bar and is only allowed in an advanced game with more than ${RULES_FACTS.colorShareMinPlayers - 1} players. ` +
       "If you ask someone to share, you are committed: you cannot back out once they agree (the rulebook's “Don't Ask, Don't Share”). " +
       "Any card you gain during the game is cleansed — it loses every condition it picked up.",
   },
@@ -213,7 +213,7 @@ export const NEW_PLAYER_MISTAKES = [
   "Playing your card to the room in the first ten seconds. Information is the only currency; you rarely get it back.",
   "Forgetting the win condition is about the LAST room, not the current one. A round you lose can still set up the win.",
   "Leaders trying to send themselves. Leaders can never be hostages — if you want to travel, abdicate first.",
-  "Colour sharing when the game has 10 or fewer players. Below 11 players a reveal has to be the whole card.",
+  `Colour sharing when the game has ${RULES_FACTS.colorShareMinPlayers - 1} or fewer players. Below ${RULES_FACTS.colorShareMinPlayers} players a reveal has to be the whole card.`,
   "Treating a hostage pick as final-but-negotiable. Once the leader announces it, it cannot be changed.",
   "Shouting at the other room, or listening at the door. That is the one thing the two-room setup exists to stop.",
   "Ignoring a “condition” card. If your card says you must lie, or keep your eyes closed, or never speak, the table is watching.",
@@ -230,12 +230,12 @@ export const RULEBOOK_OPEN: RuleItem[] = [
   {
     title: "No leader when the timer runs out",
     body:
-      "The rulebook never says what happens if a room has no leader at the end of a round. This app waits 30 seconds for the room to appoint one, and if nobody has been appointed by then the server picks a random eligible player. That is an app decision, not a printed rule — worth agreeing with your group before you start.",
+      "The rulebook never says what happens if a room has no leader at the end of a round. This app does not pick one for you: the round waits until a player in that room appoints a leader, who then chooses the hostages. That is an app decision, not a printed rule — worth agreeing with your group before you start.",
   },
   {
     title: "A leader who has put their phone down",
     body:
-      "The rulebook assumes the leader is present. If a leader disconnects while choosing hostages, the host can pick on their behalf in this app. Also not a printed rule.",
+      "The rulebook assumes the leader is present. In this app nobody else can pick for a leader who disconnects while choosing hostages: wait for them to reconnect, or usurp a new leader — leadership can still change until the hostages are locked in. Also not a printed rule.",
   },
   {
     title: "Discussion time",
@@ -245,7 +245,7 @@ export const RULEBOOK_OPEN: RuleItem[] = [
   {
     title: "Leaders meet between rounds",
     body:
-      "The parley step (leaders meet without their hostages) is printed, but it does not say how long the parley lasts. In this app the next round's timer starts when the leaders exchange the hostages, which is the rulebook's own step order.",
+      "The parley step (leaders meet without their hostages) is printed, but it does not say how long the parley lasts. The rulebook starts the next timer before the exchange; this app starts it at the exchange, so the parley lasts until the hostages cross. That order is an app decision.",
   },
 ];
 
@@ -279,7 +279,7 @@ export const ROLE_GUIDE: Record<string, GuideEntry> = {
   // ---- primaries & basic cards
   president: { whatToDo: "Stay out of the Bomber's room. Find out who the Bomber is and get them sent away." },
   bomber: { whatToDo: "End the game in the President's room. Whatever it takes — the last exchange is what counts." },
-  red_team: { whatToDo: "Bluff, share, argue, and get the President into the Bomber's room before the last exchange." },
+  red_team: { whatToDo: "Bluff, share, argue, and get the President into the Bomber's room — where they stand after the last exchange is what counts." },
   blue_team: { whatToDo: "Bluff, share, argue, and keep the President out of the Bomber's room until the game ends." },
   gambler: { whatToDo: "Play normally. At the very end, before anyone reveals, announce Red, Blue, or neither — right means you win." },
 
@@ -292,24 +292,24 @@ export const ROLE_GUIDE: Record<string, GuideEntry> = {
   angel_blue: { whatToDo: "Acting: every word you say out loud is true. Play it straight and let the truth do the damage." },
   blind_red: { whatToDo: "Acting: keep your eyes closed as much as you can and work by voice and touch." },
   blind_blue: { whatToDo: "Acting: keep your eyes closed as much as you can and work by voice and touch." },
-  bouncer_red: { whatToDo: "While your room is the bigger one, show your card to a player and say “Get out!” — they must change rooms. Not in the last round." },
-  bouncer_blue: { whatToDo: "While your room is the bigger one, show your card to a player and say “Get out!” — they must change rooms. Not in the last round." },
+  bouncer_red: { whatToDo: "While your room is the bigger one, show your card to a player and say “Get out!” — they must change rooms. Not in the last round or between rounds." },
+  bouncer_blue: { whatToDo: "While your room is the bigger one, show your card to a player and say “Get out!” — they must change rooms. Not in the last round or between rounds." },
   clown_red: { whatToDo: "Acting: smile for the entire game, whatever happens." },
   clown_blue: { whatToDo: "Acting: smile for the entire game, whatever happens." },
-  conman_red: { whatToDo: "When someone agrees to colour share with you, turn it into a full card share instead." },
-  conman_blue: { whatToDo: "When someone agrees to colour share with you, turn it into a full card share instead." },
+  conman_red: { whatToDo: "When someone agrees to colour share with you, you both privately reveal your cards to each other instead." },
+  conman_blue: { whatToDo: "When someone agrees to colour share with you, you both privately reveal your cards to each other instead." },
   coy_boy_red: { whatToDo: "You may only colour share. Never show your whole card unless a power forces you to." },
   coy_boy_blue: { whatToDo: "You may only colour share. Never show your whole card unless a power forces you to." },
-  criminal_red: { whatToDo: "Whoever card shares with you goes silent: they become “shy” and cannot show their card to anyone." },
-  criminal_blue: { whatToDo: "Whoever card shares with you goes silent: they become “shy” and cannot show their card to anyone." },
+  criminal_red: { whatToDo: "Whoever card shares with you becomes “shy”: from then on they may not reveal any part of their card to anyone." },
+  criminal_blue: { whatToDo: "Whoever card shares with you becomes “shy”: from then on they may not reveal any part of their card to anyone." },
   dealer_red: { whatToDo: "Whoever card shares with you becomes “foolish” — from then on they can never refuse a share." },
   dealer_blue: { whatToDo: "Whoever card shares with you becomes “foolish” — from then on they can never refuse a share." },
   demon_red: { whatToDo: "Acting: everything you say out loud is a lie, and you keep a straight face while you say it." },
   demon_blue: { whatToDo: "Acting: everything you say out loud is a lie, and you keep a straight face while you say it." },
   enforcer_red: { whatToDo: "Once a round, show your card to 2 players and tell them they must reveal their cards to each other." },
   enforcer_blue: { whatToDo: "Once a round, show your card to 2 players and tell them they must reveal their cards to each other." },
-  mayor_red: { whatToDo: "In an even-sized room, publicly reveal while pointing at a new leader: your point counts double." },
-  mayor_blue: { whatToDo: "In an even-sized room, publicly reveal while pointing at a new leader: your point counts double." },
+  mayor_red: { whatToDo: "In an even-sized room, publicly reveal while pointing to usurp: your vote counts double — unless the other Mayor reveals too." },
+  mayor_blue: { whatToDo: "In an even-sized room, publicly reveal while pointing to usurp: your vote counts double — unless the other Mayor reveals too." },
   medic_red: { whatToDo: "Whoever card shares with you is cured — every condition they carry is removed." },
   medic_blue: { whatToDo: "Whoever card shares with you is cured — every condition they carry is removed." },
   mime_red: { whatToDo: "Acting: never speak. Gesture everything, all game." },
@@ -320,8 +320,8 @@ export const ROLE_GUIDE: Record<string, GuideEntry> = {
   negotiator_blue: { whatToDo: "You may only card share. No public, private or colour reveals, ever." },
   paparazzo_red: { whatToDo: "Acting: break up private conversations. Nobody in your sight gets a quiet word." },
   paparazzo_blue: { whatToDo: "Acting: break up private conversations. Nobody in your sight gets a quiet word." },
-  paranoid_red: { whatToDo: "You may card share once in the whole game. Forced shares do not count against you." },
-  paranoid_blue: { whatToDo: "You may card share once in the whole game. Forced shares do not count against you." },
+  paranoid_red: { whatToDo: "You may only card share, and only once in the whole game. Forced shares do not count against you." },
+  paranoid_blue: { whatToDo: "You may only card share, and only once in the whole game. Forced shares do not count against you." },
   psychologist_red: { whatToDo: "Show your card to a coy, paranoid or shy player; if they then card share with you, their condition is cured." },
   psychologist_blue: { whatToDo: "Show your card to a coy, paranoid or shy player; if they then card share with you, their condition is cured." },
   security_red: { whatToDo: "Once: turn your card face up and tell a player “You're going nowhere.” They cannot be sent as a hostage this round." },
@@ -330,14 +330,14 @@ export const ROLE_GUIDE: Record<string, GuideEntry> = {
   shy_guy_blue: { whatToDo: "You may never show any part of your card to anyone. Talk your way through it instead." },
   thug_red: { whatToDo: "Whoever card shares with you becomes “coy” — from then on they can only colour share." },
   thug_blue: { whatToDo: "Whoever card shares with you becomes “coy” — from then on they can only colour share." },
-  usurper_red: { whatToDo: "Once, mid-round and never in the last round: reveal your card and take the leader card. Nobody can usurp you that round." },
-  usurper_blue: { whatToDo: "Once, mid-round and never in the last round: reveal your card and take the leader card. Nobody can usurp you that round." },
+  usurper_red: { whatToDo: "Once, in any round but the last: publicly reveal your card for the rest of the game and take the leader card. Nobody can usurp you that round." },
+  usurper_blue: { whatToDo: "Once, in any round but the last: publicly reveal your card for the rest of the game and take the leader card. Nobody can usurp you that round." },
   spy_red: { whatToDo: "You are on the RED team, but your card is printed BLUE. A colour share makes you look like a Blue Team player — use it." },
   spy_blue: { whatToDo: "You are on the BLUE team, but your card is printed RED. A colour share makes you look like a Red Team player — use it." },
 
   // ---- single-printing team cards
-  cupid: { whatToDo: "Once a game, show your card to 2 players: they fall in love and must end in the same room. Not on yourself." },
-  eris: { whatToDo: "Once a game, show your card to 2 players: they hate each other and must end in opposite rooms. Not on yourself." },
+  cupid: { whatToDo: "Once a game, show your card to 2 players: they fall in love, and ending in the same room replaces their own goal. Not on yourself." },
+  eris: { whatToDo: "Once a game, show your card to 2 players: they hate each other, and ending in opposite rooms replaces their own goal. Not on yourself." },
   doctor: { whatToDo: "Get the President to card share with you before the game ends. If they never do, the whole Blue Team loses." },
   engineer: { whatToDo: "Get the Bomber to card share with you before the game ends. If they never do, the whole Red Team loses." },
   dr_boom: { whatToDo: "Card share with the President: your entire room dies instantly and the game ends. Never works on the President's Daughter." },
@@ -345,7 +345,7 @@ export const ROLE_GUIDE: Record<string, GuideEntry> = {
   immunologist: { whatToDo: "You are immune to every power and condition. Play the Red Team game out loud and let them waste their powers on you." },
   invincible: { whatToDo: "You are immune to every power and condition, without exception. Cannot be played with the Zombie." },
   martyr: { whatToDo: "Backup Bomber: if the Bomber is buried, you are the Bomber. Otherwise play as a Red Team player." },
-  daughter: { whatToDo: "Backup President: if the President is buried, you must not be in the Bomber's room at the end. Otherwise play as Blue." },
+  daughter: { whatToDo: "Backup President: if the President is buried, you are the President — stay out of the Bomber's room. Otherwise play as Blue." },
   nurse: { whatToDo: "Backup Doctor: if the Doctor is buried, the President must card share with you or the Blue Team loses." },
   tinkerer: { whatToDo: "Backup Engineer: if the Engineer is buried, the Bomber must card share with you or the Red Team loses." },
 
@@ -381,7 +381,7 @@ export const ROLE_GUIDE: Record<string, GuideEntry> = {
   victim: { whatToDo: "End the game in the Bomber's room." },
 
   // ---- green: Team Zombie
-  leprechaun: { whatToDo: "Whoever shares with you takes your card and gives you theirs. You win at the end either way — so hand the card to as many people as you can." },
+  leprechaun: { whatToDo: "You are “foolish”, so you can't refuse a share, and whoever shares with you swaps cards. Whoever holds the Leprechaun at the end wins." },
   zombie: { whatToDo: "Anyone who card or colour shares with you becomes a zombie. Team Zombie wins only if every player still alive at the end is a zombie." },
 };
 

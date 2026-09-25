@@ -65,7 +65,7 @@ export function HowToPlay() {
           <li>Two teams in two rooms. Blue holds the <b>President</b>, Red holds the <b>Bomber</b>.</li>
           <li>Red wins if the President and the Bomber end the game in the <b>same</b> room. Blue wins if they don't.</li>
           <li>Play {RULES_FACTS.basicRounds.length} timed rounds ({RULES_FACTS.basicRounds.map((r) => `${r.minutes} min`).join(" · ")}).</li>
-          <li>Each round ends with each room's leader sending hostages into the other room — that is the only way anyone moves.</li>
+          <li>Each round ends with each room's leader sending hostages into the other room — in the basic game, that is the only way anyone changes rooms.</li>
         </ul>
       </Section>
 
