@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-server
+.git
+data
+*.log
+
+# The publisher's print-and-play files are NOT redistributed in the image.
+printable_files
+
+# Local-only clutter
+docs/screenshots
+tools/assets
