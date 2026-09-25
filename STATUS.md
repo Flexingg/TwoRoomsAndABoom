@@ -1,6 +1,6 @@
 # STATUS — Two Rooms and a Boom app
 
-Last updated: 2026-09-25 13:50 EDT (pre-game pages)
+Last updated: 2026-09-25 14:40 EDT (Docker image built and verified)
 
 ## TL;DR
 
@@ -102,7 +102,7 @@ standing around each on their own phone; no horizontal scroll at 360 px (asserte
 | 8 | 4-letter code, unambiguous alphabet, lockable, expires at game end | alphabet + 4 letters | **done** (`host:lockCode`; a finished game is no longer joinable and expires) |
 | 9 | Card art extracted from the PnP sheets | missing | **done** — 98 cards + bars + backs + leader card in `client/public/cards/`, manifest in `shared/cards/assets.json` |
 | 10 | Press-and-hold card back, card/colour share images, leader card | text/colour UI | **done** — `client/src/cardArt.tsx` |
-| 11 | `docker compose up -d --build` on :8080 + optional Caddy HTTPS | nothing | **files done and `docker compose config` verified** — the image build itself could NOT be run here (no docker-group access, no sudo); see "Not verified" |
+| 11 | `docker compose up -d --build` on :8080 + optional Caddy HTTPS | nothing | **done, and the build is now VERIFIED** — the image really builds and the container really plays; see "Docker — built and verified" |
 | 12 | README with setup, both run modes, rules, licensing note | missing | **done** (+ protocol and persistence sections) |
 | 13 | systemd user service, 0.0.0.0, logs to `~/.hermes/logs/` | not created | **done** (`deploy/tworooms.service`) |
 | 14 | pnpm workspaces | npm, single package | **OPEN** — reconciled, see `DECISIONS.md` D8 |
@@ -141,16 +141,62 @@ standing around each on their own phone; no horizontal scroll at 360 px (asserte
     publisher's own card faces, cut locally by `tools/assets/extract_cards.py`; the rotation question is
     recorded in DECISIONS.md D16, the Drunk's "????" bar in D17.
 
+## Docker — built and verified
+
+The plan's one command does work, and this is the real output from this box (host port 18080 because
+another service on this machine already holds :8080):
+
+```
+sg docker -c 'docker compose build'        # exit 0
+  #[9]  RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++   DONE
+  #[10] RUN npm ci                                                                           DONE 13.5s
+  #[12] RUN npm run build                                                                    DONE  7.4s
+tworoomsandaboom-app:latest  646MB  (sha256:e098121fd5e1…)
+node -v  ->  v22.23.3                                # the plan's Node 22 LTS
+
+inside the image:  /app = dist  dist-server  node_modules  package.json
+find / -name '*.pdf'            -> (nothing)         # .dockerignore really keeps the sheets out
+/app/printable_files, /app/docs, /app/tools         -> No such file or directory
+ls /app/dist/cards | wc -l      -> 203               # the served bundle carries the card art
+
+container on :18080:
+  /api/health            -> {"ok":true,"games":0,"players":0,"gamesTotal":0,"uptimeSec":2}
+  /cards/agent_blue.webp -> 200  image/webp  31558B, RIFF/WEBP
+  /cards/card_back.webp, /cards/leader.webp, /, /play, /roles  -> 200
+  node tools/wire_leak_check.mjs --port 18080  -> PASS   (6 players, a private reveal, a public
+                                                 reveal: no client ever saw a role it was not
+                                                 allowed to know, host included)
+  /data/games.db         -> written                # the compose volume path is the one the app uses
+```
+
+Two defects were found by **actually running the build** — `docker compose config` cannot see either:
+
+1. `npm ci` failed outright: `node:22-slim` ships no toolchain, so `better-sqlite3`'s node-gyp step died
+   with *"Could not find any Python installation to use"*. The build stage now installs
+   `python3 make g++` (build stage only — the runtime image stays slim and copies the compiled modules).
+2. `docker compose` interpolates the whole file **before** it applies profiles, so the caddy service's
+   `${DOMAIN:?…}` made `compose build`, `compose config` and the plan's bare `docker compose up -d --build`
+   all fail unless `DOMAIN` happened to be exported — even though caddy only runs under the https profile.
+   It now has a default that caddy ignores unless it is actually started.
+
+`bash tools/docker_verify.sh` reproduces all of the above end to end.
+
+One thing to know on this particular machine, not a defect in the repo: **host :8080 is already taken**
+(by the SparkyFitness container), so `docker compose up -d` here would fail to bind. The image itself is
+fine; it was exercised on :18080.
+
 ## Not verified / open
 
-- **The Docker image was not built.** `docker` is installed but this account is not in the `docker` group and
-  there is no password-free sudo, so the daemon is unreachable. `docker compose config` parses (both
-  profiles), the Dockerfile's build steps are exactly `npm ci && npm run build` which are known-good here, and
-  `.dockerignore` excludes `printable_files/` — but nobody has run `docker compose up`. That is a claim
-  waiting to be tested on a machine with docker access.
+- **The Docker image is now really built and exercised.** It was never built before this pass (the
+  note said the daemon was unreachable — it is reachable via `sg docker`, the login shell just predates
+  the account's docker-group membership). Building it found two real defects that `docker compose config`
+  could not see, both fixed: `node:22-slim` has no toolchain so `npm ci` died in node-gyp on
+  `better-sqlite3`, and the caddy service's `${DOMAIN:?}` made even `compose build` and the plan's bare
+  `docker compose up -d --build` fail. See "Docker — built and verified" below and `DECISIONS.md` D21.
+  Reproduce with `bash tools/docker_verify.sh`.
 - **Card art, what is honestly true:** the extraction is scripted, `--check` proves the manifest and the
   engine agree in both directions, and the crops were checked by eye on
-  `tools/assets/contact-sheet.png`. Two caveats worth keeping: the naming of the six image-only sheets comes
+  `tools/assets/contact-sheet.png` — re-checked again this pass, tile by tile. Two caveats worth keeping: the naming of the six image-only sheets comes
   from OCR (each card was verified on the contact sheet, and every one of the 98 names is asserted against
   the engine in `tests/card-art.test.ts`), and card *bodies* are cut at the 4×2 grid — the sheets print the
   cards edge to edge, so a cell is the card plus its own bleed, not a pixel-perfect trim.
@@ -168,7 +214,8 @@ server/src/    index (boot), app (http+ws+health+rate limit), room, store (memor
 client/src/    React host screen, player screen, useGame (socket, clock offset, wake lock)
 tests/         hidden-info (the headline), win, deck, hostages, exchange, leaders, timer, server, protocol, persistence
 tools/         mutation_proof.py, wire_mutation_proof.sh, wire_leak_check.mjs, browser_check.mjs,
-               restart_check.mjs, extract_sheets.sh, card_art_check.mjs
+               restart_check.mjs, extract_sheets.sh, card_art_check.mjs, pregame_check.mjs,
+               docker_verify.sh (builds the image and exercises the container)
 tools/assets/  extract_cards.py, contact-sheet.png
 deploy/        tworooms.service (also installed to ~/.config/systemd/user/)
 docs/          PLAN.md (authoritative), RULES.md, SPEC.md, DECISIONS.md, screenshots/
