@@ -1,7 +1,7 @@
 # Mutation proof
 
-Command: `python3 tools/mutation_proof.py` — run 2026-09-25T15:34:11Z
-Baseline: `Tests  206 passed (206)`
+Command: `python3 tools/mutation_proof.py` — run 2026-09-25T17:15:47Z
+Baseline: `Tests  216 passed (216)`
 
 Each mutation is applied to a tracked file, the single test file that should catch it is run, the real
 failure is pasted below, and the mutation is reverted with `git checkout --`. 
@@ -115,7 +115,7 @@ AssertionError: expected 'Blue Team lost. This is an acting car…' to match /Bl
  FAIL  tests/exchange.test.ts > hostage selection and exchange > the exchange actually swaps the hostages' rooms and nobody else's
 AssertionError: expected 'A' to be 'B' // Object.is equality
 ...
-   Duration  412ms (transform 69%, tests 15%, import 14%, worker 2%)
+   Duration  410ms (transform 69%, tests 15%, import 14%, worker 2%)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
  FAIL  tests/exchange.test.ts > hostage selection and exchange > the exchange actually swaps the hostages' rooms and nobody else's
 AssertionError: expected 'A' to be 'B' // Object.is equality
@@ -260,7 +260,7 @@ Received: "lose"
  FAIL  tests/win.test.ts > grey objectives decided by history > Agoraphobe wins if never moved, loses once sent as a hostage
 AssertionError: expected 'win' to be 'lose' // Object.is equality
 ...
-   Duration  485ms (transform 66%, tests 21%, import 12%, worker 2%)
+   Duration  477ms (transform 64%, tests 22%, import 12%, worker 2%)
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
  FAIL  tests/win.test.ts > grey objectives decided by history > Agoraphobe wins if never moved, loses once sent as a hostage
 AssertionError: expected 'win' to be 'lose' // Object.is equality
@@ -276,42 +276,66 @@ Received: "win"
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
 ```
 
+## Mutation 10 — a role loses its card art
+
+- **File:** `shared/cards/assets.json`
+- **Why it matters:** the manifest is the only source of card art, and it is keyed by the engine's role keys: if a role the engine can deal has no art, the app shows a card it cannot picture.
+- **Test that must catch it:** `tests/card-art.test.ts`
+- **Result:** CAUGHT — the suite fails
+- `vitest` exit code: `1`
+
+```
+ FAIL  tests/card-art.test.ts > card art against the engine > covers every role the engine deals
+AssertionError: expected [ 'agoraphobe' ] to deeply equal []
+ FAIL  tests/card-art.test.ts > card art against the engine > has no art for a role the engine does not have
+AssertionError: expected [ 'agoraphobe_mutated_away' ] to deeply equal []
+ FAIL  tests/card-art.test.ts > the printed colour on each extracted card > matches the engine, except the two Spies, which are the opposite colour
+TypeError: Cannot read properties of undefined (reading 'printedColour')
+...
+       |                                                                       ^
+     28|   });
+     29|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+ FAIL  tests/card-art.test.ts > the printed colour on each extracted card > matches the engine, except the two Spies, which are the opposite colour
+TypeError: Cannot read properties of undefined (reading 'printedColour')
+ ❯ tests/card-art.test.ts:71:17
+     69|       const unknownBar = role.key === "drunk";
+     70|       const expected = spy ? (role.key === "spy_red" ? "blue" : "red")…
+     71|       if (entry.printedColour !== expected) {
+       |                 ^
+     72|         wrong.push(`${role.key}: cut from the sheet as ${entry.printed…
+     73|       }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+```
+
+## Mutation 11 — an extracted card carries the wrong printed colour
+
+- **File:** `shared/cards/assets.json`
+- **Why it matters:** a Spy card is printed in the opposite team's colour (RULES.md §9) — the card face is what other players see, so a flipped colour is a rules bug, not a cosmetic one.
+- **Test that must catch it:** `tests/card-art.test.ts`
+- **Result:** CAUGHT — the suite fails
+- `vitest` exit code: `1`
+
+```
+ FAIL  tests/card-art.test.ts > the printed colour on each extracted card > matches the engine, except the two Spies, which are the opposite colour
+AssertionError: expected [ Array(1) ] to deeply equal []
+...
+- Expected
++ Received
+- []
++ [
++   "spy_red: cut from the sheet as red, engine says blue",
++ ]
+ ❯ tests/card-art.test.ts:75:19
+     73|       }
+     74|     }
+     75|     expect(wrong).toEqual([]);
+       |                   ^
+     76|   });
+     77|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+```
+
 ## Verdict
 
-9 mutations applied; **9 caught, 0 missed** — plus the wire-level proof below, run against a real server.
-
-## Mutation 10 — `viewFor` leaks, proved end to end on the wire
-
-- **Files:** `shared/src/view.ts` (leak applied), `tools/wire_mutation_proof.sh`, `tools/wire_leak_check.mjs`
-- **Why it matters:** the unit test checks `viewFor`'s return value; this one checks what an independent
-  raw-WebSocket client actually *receives* from a running server, over a full scripted game.
-- **Command:** `bash tools/wire_mutation_proof.sh 8797` (builds a leaking server, runs the check, rebuilds)
-- **Result:** CAUGHT — 14 independent checks fail, and the honest server passes afterwards.
-
-```
-FAILED: 14
- - Ann has only its own role key on the wire (saw blue_team,red_team,president,bomber)
- - Bo has only its own role key on the wire (saw blue_team,red_team,president,bomber)
- - Cy has only its own role key on the wire (saw blue_team,red_team,president,bomber)
- - Di has only its own role key on the wire (saw blue_team,red_team,president,bomber)
- - Ed has only its own role key on the wire (saw blue_team,red_team,president,bomber)
- - Fi has only its own role key on the wire (saw blue_team,red_team,president,bomber)
- - the host learned no role keys on the deal (saw blue_team,red_team,president,bomber)
- - Bo saw exactly its own card and Ann's (saw blue_team,red_team,president,bomber)
- - Di's frames mention no role key but its own (saw blue_team,red_team,president,bomber)
- - Ed's frames mention no role key but its own (saw blue_team,red_team,president,bomber)
- - the host still learned no role keys after the private reveal
- - Di's frames still mention no role key but its own
- - Ed's frames still mention no role key but its own
- - the host screen learned no role keys through the whole sequence (saw blue_team,red_team,president,bomber)
-
-wire check exit code: 1
-caught: the wire check fails when viewFor leaks.
-== rebuilding the honest server
-```
-
-### Verdict (all ten)
-
-10 mutations applied; **10 caught, 0 missed**. The conformed code (Zod intents, `clock`/`share:incoming`
-events, rate limiting, SQLite persistence) passes all ten, so none of the new transport or storage work
-narrowed the hidden-information boundary or the win resolution.
+11 mutations applied; **11 caught, 0 missed**.

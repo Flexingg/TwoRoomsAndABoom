@@ -18,9 +18,34 @@ workspaces, Fastify/Socket.IO) which are listed below as open rather than preten
   Real output in `MUTATION_PROOF.md`.
 - **Browser E2E:** `node tools/browser_check.mjs --attach --port 8790` → PASS (245 frames leak-scanned)
 - **Restart E2E:** `node tools/restart_check.mjs --port 8790` → PASS (6/6 seats survive a real restart)
-- **Card art E2E:** `node tools/card_art_check.mjs --attach --port 8790` → PASS (12 phones: press-and-hold
-  flip, card share shows the real face, colour share shows the bar only, the leader card with this round's
-  count, the host's chart)
+- **Card art E2E:** `node tools/card_art_check.mjs --attach --port 8790` → **PASS** against the deployed
+  service. 12 phones (a colour share needs more than 10 players): press-and-hold flips the card and release
+  turns it back, the card share showed the recipient the real face of the sharer's card, the colour share
+  showed only the printed bar in that card's own colour, the leader's phone showed the leader card with
+  "round 1 of 3 · 1 hostage · 11–13 players", and the host screen showed the chart for the round.
+  Screenshots in `docs/screenshots/card-art/`.
+- **Nothing regressed:** `node tools/browser_check.mjs --attach --port 8790` → PASS after the card art landed
+  (7 phones, 3 rounds, 245 frames leak-scanned, BLUE TEAM WINS). Its card-reading step now press-and-holds
+  the card and reads the role off the art, since tapping to look is gone.
+
+## Card art — how it works and what was verified
+
+- **The source is the sheets, and only the sheets.** `tools/assets/extract_cards.py` renders
+  `printable_files/*.pdf` with `pdftoppm`, finds the 4×2 grid from the page's own ink, cuts each card as
+  printed and the team bar off the bottom of it, names it from the words inside its title block (OCR for the
+  six image-only sheets), and writes WebP + a manifest keyed by the engine's role keys. The tool has no
+  network path at all.
+- **98 cards**, one per role the engine can deal, plus 12 duplicate printings ignored (the sheets print the
+  basic Red/Blue Team cards seven times each). `--check` fails in both directions: a role with no art, or art
+  with no role.
+- **Checked by eye, not just by exit code:** `tools/assets/contact-sheet.png` shows all 110 cuts with their
+  keys; every crop is a whole card, the labels match the art, and the two names that needed OCR fuzziness
+  ("NUCLEARTYRAN" for Nuclear Tyrant, the Blue Team cards that OCR merged into one word) are reported by the
+  tool as they happen.
+- **The orientation question** (why the role title runs down the side of every card) is written up in
+  `docs/DECISIONS.md` D16 with the evidence, and the Drunk's "????" bar in D17.
+- **Colours** in `tailwind.config.js` are sampled from the printed bars: red `#4e1518`, blue `#3d4fa9`,
+  grey `#5b6060`, green `#64c532`, card back `#3c393c`.
 
 ## What this pass changed (plan conformance)
 

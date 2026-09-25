@@ -8,8 +8,32 @@
 // --attach joins an already-running server on --port instead of spawning one (and won't kill it), which is
 // how the deployed systemd service on :8790 gets checked.
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { chromium } from "playwright";
+
+// The card a phone is holding is read off the card art itself: the face image is
+// cut from the print-and-play sheets and keyed by the engine's role key, so the
+// manifest maps what is on screen back to the role the engine dealt.
+const manifest = JSON.parse(readFileSync(new URL("../shared/cards/assets.json", import.meta.url), "utf8"));
+const roleOfCard = async (page) => {
+  const src = await page.locator('section button img[alt^="Your card"]').first().getAttribute("src");
+  const key = Object.keys(manifest.cards).find((k) => src.endsWith(manifest.cards[k].face));
+  if (!key) throw new Error(`unrecognised card face ${src}`);
+  return { key, name: manifest.cards[key].printedName };
+};
+// Your card lies face down and turns over while it is held, so reading it is a
+// press and hold, not a click.
+const holdCard = async (page) => {
+  const card = page.getByRole("button", { name: /Press and hold to look at your card/ });
+  const box = await card.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(150);
+  const held = await roleOfCard(page);
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  return held;
+};
 
 const arg = (n, d) => (process.argv.includes(`--${n}`) ? process.argv[process.argv.indexOf(`--${n}`) + 1] : d);
 const PORT = Number(arg("port", 8799));
@@ -69,11 +93,11 @@ try {
   await host.getByRole("button", { name: "Deal the cards" }).click();
   await host.getByText("Cards are dealt").waitFor();
 
-  // Every phone: look at your card; nothing overflows 360 px.
+  // Every phone: hold your card to look at it; nothing overflows 360 px.
   for (const p of players) {
-    await p.page.getByText("Tap to look at your card").click();
+    p.roleKey = (await holdCard(p.page)).key;
     p.room = (await p.page.locator("header .text-2xl").innerText()).trim().slice(-1);
-    p.role = (await p.page.locator("section .text-3xl").first().innerText()).trim();
+    p.role = manifest.cards[p.roleKey].printedName;
     const overflow = await p.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (overflow > 0) fail(`${p.name}: horizontal overflow of ${overflow}px at 360px`);
   }
@@ -99,10 +123,10 @@ try {
   {
     const p = rooms.A[2] ?? rooms.A[0];
     await p.page.reload();
-    await p.page.getByText("Tap to look at your card").click();
-    const again = (await p.page.locator("section .text-3xl").first().innerText()).trim();
-    if (again !== p.role) fail(`rejoin changed ${p.name}'s card: ${p.role} -> ${again}`);
-    log("reload-rejoin kept", p.name, "as", again);
+    await p.page.getByRole("button", { name: /Press and hold to look at your card/ }).waitFor();
+    const again = await holdCard(p.page);
+    if (again.key !== p.roleKey) fail(`rejoin changed ${p.name}'s card: ${p.roleKey} -> ${again.key}`);
+    log("reload-rejoin kept", p.name, "as", again.name);
   }
 
   // Three end-of-round cycles through the UI.
