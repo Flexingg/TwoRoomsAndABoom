@@ -1,6 +1,6 @@
 # STATUS — Two Rooms and a Boom app
 
-Last updated: 2026-09-25 14:45 EDT (rules review of the pre-game pages; Docker image built and verified)
+Last updated: 2026-09-25 14:50 EDT (rules review of the pre-game pages; Docker image built and verified; card art re-verified by eye)
 
 ## TL;DR
 
@@ -22,6 +22,10 @@ items (pnpm workspaces, Fastify/Socket.IO) which are listed below as open rather
   caught**). Real output in `MUTATION_PROOF.md`.
 - **Browser E2E:** `node tools/pregame_check.mjs` → PASS (both new pages, 46 assertions);
   `node tools/browser_check.mjs --attach --port 8790` → PASS (7 phones, 3 rounds, 245 frames leak-scanned)
+- **Docker E2E:** the image **really builds** (`tworoomsandaboom-app:latest`, 646 MB, Node 22) and the
+  container **really serves** — health, card art over HTTP, `/`, `/play`, `/roles`, a live game that passes
+  the wire-leak check, and the SQLite snapshot under `/data`. `bash tools/docker_verify.sh` reproduces it.
+  This was the one item STATUS listed as never run; running it found and fixed two real defects (below).
 - **Restart E2E:** `node tools/restart_check.mjs --port 8790` → PASS (6/6 seats survive a real restart)
 - **Card art E2E:** `node tools/card_art_check.mjs --attach --port 8790` → **PASS** against the deployed
   service. 12 phones (a colour share needs more than 10 players): press-and-hold flips the card and release
@@ -205,6 +209,17 @@ One thing to know on this particular machine, not a defect in the repo: **host :
 (by the SparkyFitness container), so `docker compose up -d` here would fail to bind. The image itself is
 fine; it was exercised on :18080.
 
+## Two cron jobs were working in this repo at once (fixed)
+
+For the record, because it explains the interleaved commits in the log: two Hermes cron jobs were both
+scheduled at `25 14 * * *` against this repo — `TwoRooms: resume PLAN.md conformance` (this pass) and
+`tworooms-pregame-opus-review` (the retry of the Opus pass that a Claude limit had blocked). Both fired at
+14:25, so an Opus review was editing `docs/guide`-adjacent files while the Docker work was happening in the
+same tree. Nothing was lost: the reviewer worked in a separate git worktree, committed only its own files,
+and its push was a plain fast-forward that also carried the Docker commits. The review job was a one-shot
+retry whose stated reason ("only exists because the limit blocked the original pass") is now spent, so it has
+been **paused**; the collision will not recur.
+
 ## Not verified / open
 
 - **The Docker image is now really built and exercised.** It was never built before this pass (the
@@ -220,7 +235,12 @@ fine; it was exercised on :18080.
   from OCR (each card was verified on the contact sheet, and every one of the 98 names is asserted against
   the engine in `tests/card-art.test.ts`), and card *bodies* are cut at the 4×2 grid — the sheets print the
   cards edge to edge, so a cell is the card plus its own bleed, not a pixel-perfect trim.
-- **pnpm workspaces, Fastify, Socket.IO** (D8).
+- **pnpm workspaces, Fastify, Socket.IO** (D8). **Deliberately not attempted this pass**, though it was the
+  last named option: the app already has the properties those choices were for (D8), the prompt for this pass
+  says not to chase them at the cost of a working app, and a three-package workspace + server-framework swap
+  would touch every import, the Dockerfile that was just proven to build, and the whole test/browser harness —
+  for no user-visible gain. It is the right kind of change to plan first and do deliberately on a quiet repo,
+  not as a tail-end extra. Still open, still recorded here rather than quietly dropped.
 - **PLAN.md's no-leader fallback is not implemented** (30-second prompt, then a random eligible player; host
   picks for a disconnected leader). The pre-game page now describes the real behaviour instead; whether to
   build the fallback is an open product decision, not done here.
