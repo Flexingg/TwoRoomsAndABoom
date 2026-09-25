@@ -99,6 +99,26 @@ MUTATIONS = [
         "tests/timer.test.ts",
         "rule 1 is 'time is public' and round expiry is what advances the game.",
     ),
+    (
+        "the Doctor's extra Blue condition is dropped",
+        "shared/src/win.ts",
+        "  const doctorOk = !doctorInPlay || cardShared(isPresidentCard, isDoctorCard);",
+        "  const doctorOk = true; // MUTANT: ignore the Doctor",
+        "tests/win.test.ts",
+        "RULES.md §9: a Doctor in play means Blue also needs the President to have card shared with it, "
+        "otherwise Blue loses.",
+    ),
+    (
+        "a special role's own win condition is ignored (Agoraphobe always wins)",
+        "shared/src/win.ts",
+        "        const m = moves(id);\n"
+        '        set(id, m.length === 0, r.winText, m.length ? `You left your room ${m.length} time(s).` : "You never left your room.");',
+        "        const m = moves(id);\n"
+        '        set(id, true, r.winText, "MUTANT: never mind the moves.");',
+        "tests/win.test.ts",
+        "RULES.md §9: Agoraphobe wins only if it never left its initial room — the per-card objectives are "
+        "as load-bearing as the base rule.",
+    ),
 ]
 
 
