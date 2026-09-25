@@ -1,6 +1,6 @@
 # STATUS — Two Rooms and a Boom app
 
-Last updated: 2026-09-25 14:40 EDT (Docker image built and verified)
+Last updated: 2026-09-25 14:45 EDT (rules review of the pre-game pages; Docker image built and verified)
 
 ## TL;DR
 
@@ -15,7 +15,8 @@ items (pnpm workspaces, Fastify/Socket.IO) which are listed below as open rather
 - **Host screen:** http://192.168.1.146:8790/ · **Join screen:** http://192.168.1.146:8790/play
 - **Pre-game pages:** http://192.168.1.146:8790/how-to-play · http://192.168.1.146:8790/roles
 - **Service:** `systemctl --user status tworooms` (enabled, `0.0.0.0`, logs `~/.hermes/logs/tworooms.log`)
-- **Suite:** `npm test` → **230 tests, 12 files, all green** (includes `tests/guide.test.ts`)
+- **Suite:** `npm test` → **256 tests, 12 files, all green** (includes `tests/guide.test.ts`, now with the
+  rules-review block)
 - **Mutations:** `python3 tools/mutation_proof.py` → **14/14 caught** (three of them the new drift/numbers
   checks); `bash tools/wire_mutation_proof.sh` → the wire check fails against a leaking build (**15th,
   caught**). Real output in `MUTATION_PROOF.md`.
@@ -51,6 +52,25 @@ standing around each on their own phone; no horizontal scroll at 360 px (asserte
 - **Where the rulebook is silent, the page says so** (DECISIONS D20): no leader at timer end, a leader who
   disconnects, "discussion time"/no turns, how long the parley lasts. Where two printed sources disagree
   (the 11–13 hostage number) the page states which one the app follows.
+
+### Rules review of the pre-game pages (independent pass)
+
+Every `ROLE_GUIDE` line and every How to Play paragraph was re-read against the Character Guide v3 and
+Rulebook v3 text (`pdftotext -layout`) and against `roles.ts`. **Fixed** (commit `41bbac6`):
+- **Leprechaun** said you win "either way" and to hand the card on. Printed: whoever *holds* it at the end wins.
+- **Conman** said a colour share becomes a card share. Printed (and engine): a mutual private reveal.
+- **Criminal** said "shy" players go silent ("shy" = may not reveal any part of the card).
+- **Mayor, Paranoid, Cupid, Eris, Usurper, Bouncer, Red Team, President's Daughter** each lost or bent a
+  printed clause (other Mayor cancels; *only* card share; objective *replaced*; permanent public reveal;
+  not between rounds; the room *after* the last exchange counts; you *are* the President).
+- **Timer order**: the page called "timer starts at the exchange" the rulebook's own order. Rulebook p.9 is
+  step 3 timer, step 4 exchange. The page now labels the app's order as an app decision.
+- **The page claimed app behaviour that does not exist**: a 30-second random-leader fallback and a host
+  pick for a disconnected leader (both only in PLAN.md). It now says what the app does: the round waits for a
+  player to appoint a leader; a disconnected leader can be usurped until hostages lock. DECISIONS D20 matches.
+- Removed the unprinted "all pointing stops" from usurpation; the 10/11 colour-share threshold is now
+  derived from `RULES_FACTS`; the summary's "only way anyone moves" is now scoped to the basic game.
+- 26 new tests pin these; 13 of them fail against the old text.
 
 ## No drift between the guide and the engine (DECISIONS D18)
 
@@ -201,6 +221,13 @@ fine; it was exercised on :18080.
   the engine in `tests/card-art.test.ts`), and card *bodies* are cut at the 4×2 grid — the sheets print the
   cards edge to edge, so a cell is the card plus its own bleed, not a pixel-perfect trim.
 - **pnpm workspaces, Fastify, Socket.IO** (D8).
+- **PLAN.md's no-leader fallback is not implemented** (30-second prompt, then a random eligible player; host
+  picks for a disconnected leader). The pre-game page now describes the real behaviour instead; whether to
+  build the fallback is an open product decision, not done here.
+- **Left as-is from the rules review (judgement calls, reported not changed):** the Nuclear Tyrant's printed
+  win line is ambiguous (the page follows the engine's "neither"); "7–20 minutes" in the premise is the box's
+  number, not an engine constant; "Nobody has to tell the truth" (How to Play) is true of the basic game but
+  not of the Angel; two new-player "mistakes" (revealing early, President revealing) are strategy advice.
 - The leader-card hostage table and the two Spy cards' printed colours come from OCR (two independent passes);
   they are the only rules facts with no second human-readable source.
 
