@@ -60,6 +60,15 @@ export function HowToPlay() {
       </header>
       <Jump />
 
+      <Section title="The 30-second version">
+        <ul className="space-y-2 text-lg">
+          <li>Two teams in two rooms. Blue holds the <b>President</b>, Red holds the <b>Bomber</b>.</li>
+          <li>Red wins if the President and the Bomber end the game in the <b>same</b> room. Blue wins if they don't.</li>
+          <li>Play {RULES_FACTS.basicRounds.length} timed rounds ({RULES_FACTS.basicRounds.map((r) => `${r.minutes} min`).join(" · ")}).</li>
+          <li>Each round ends with each room's leader sending hostages into the other room — that is the only way anyone moves.</li>
+        </ul>
+      </Section>
+
       <div className="space-y-3" id="premise">
         <Section title="The point">
           <p className="text-lg text-zinc-100">{PREMISE}</p>
@@ -163,8 +172,9 @@ export function HowToPlay() {
             </table>
           </div>
           <p className="mt-3 text-sm text-amber-300">
-            Ambassadors don't count toward the player count. And the rulebook's own chart disagrees with the leader card
-            for 11–13 players — this app follows the leader card. See “Unclear in the rules” below.
+            Ambassadors don't count toward the player count, and “–” means that round is not played at that player
+            count. The rulebook's own chart disagrees with the leader card for 11–13 players — this app follows the
+            leader card. See “Unclear in the rules” below.
           </p>
         </Section>
       </div>

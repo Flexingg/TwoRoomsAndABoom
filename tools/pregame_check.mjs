@@ -52,6 +52,7 @@ const how = await page.locator("body").innerText();
 ok(page.url().endsWith("/how-to-play"), "clicking 'How to play' opens /how-to-play", page.url());
 ok(/How to play/i.test(how), "the page has its heading");
 ok(/Two teams, two rooms/.test(how), "the premise renders");
+ok(/30-second version/i.test(how) && /Blue holds the President/.test(how), "the 30-second summary renders at the top");
 ok(/Same room at the end — the whole Red Team wins\./.test(how), "the Red win condition renders verbatim from the shared guide");
 ok(/Different rooms at the end — the whole Blue Team wins\./.test(how), "the Blue win condition renders");
 ok(/leaders can never be hostages/i.test(how), "the leader rule renders");
