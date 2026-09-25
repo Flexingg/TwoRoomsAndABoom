@@ -1,71 +1,75 @@
 # STATUS — Two Rooms and a Boom app
 
-Last updated: 2026-09-25 (cron run 1)
+Last updated: 2026-09-25 (cron run 2 — the plan-conformance pass)
 
-## Step 0 — materials: DONE
+## Where we are
 
-Read all 19 sheets in `printable_files/`. Rulebook v3 and Character Guide v3 have real text layers
-(`pdftotext -layout`). The 6 remaining character sheets (PnP03/05/06/07/13/14) and **both leader cards are
-image-only**, so they were rendered at 300 dpi and OCR'd (`rapidocr-onnxruntime`); the leader-card hostage
-table was cropped per row and re-OCR'd binarised at 8× to settle it.
+`docs/PLAN.md` (the owner's architecture spec) arrived after run 1 was already dispatched. This run's job is
+to **bring the repo into line with the plan**. `docs/RULES.md` (extracted from the publisher's sheets) and
+`docs/SPEC.md` (run 1's build contract) stay authoritative for *the game*; the PLAN is authoritative for
+*the architecture*.
 
-Everything extracted is written up in **`docs/RULES.md`** — player counts, round structure and timings, the
-two rooms and leader mechanics, hostage-exchange numbers, every win condition, and the full official role
-list with each card's printed team colour.
+### Run 1 delivered (verified by this run)
 
-### Rules settled from the sheets
+- Step 0 materials: all 19 sheets read, `docs/RULES.md` written, ambiguities resolved and recorded.
+- `shared/src`: full role catalogue (93 cards incl. both Spy printings), deck builder with loud validation,
+  leader-card hostage chart, state machine, `win.ts`, and `viewFor()` — the single send path.
+- `server/src`: node:http + `ws` transport, rooms, timers, connections.
+- `client/src`: React host screen + player screen, QR, PWA (vite-plugin-pwa).
+- `tests/`: **187 tests, 8 files, all green**; `MUTATION_PROOF.md` records 7 mutations, 7 caught
+  (leak, hostage chart, win inversion, no-op exchange, leader-as-hostage, single-vote usurp, dead timer).
+- Repo `Flexingg/TwoRoomsAndABoom` already exists and is **PRIVATE** (verified with `gh`).
 
-- 6–30 players; 3 timed rounds in the basic game: **3 min, 2 min, 1 min**; >10 players may add 5 min and 4 min
-  rounds (advanced), 6–10 players play 3 rounds only.
-- Deck = President + Bomber + equal Red/Blue cards, one per player; odd count adds the **Gambler**.
-- Two rooms; each keeps its own leader; leader chooses the hostages; **leaders can never be hostages**;
-  leaders change by abdication or by a strict majority usurp vote.
-- End of round, in order: select hostages → leaders parley → next timer starts → exchange → return.
-- Win: after the last exchange everyone reveals; **President in the same room as the Bomber ⇒ Red Team wins,
-  otherwise Blue Team wins.** A Bomber that gains "dead" earlier doesn't kill its room.
+## Plan conformance checklist
 
-### Ambiguity found and how it was resolved (per the brief: pick the published reading, don't guess silently)
+| # | Plan requirement | State on entry | Action |
+|---|---|---|---|
+| 1 | Server owns all state; `viewFor` single exit, never leaks | DONE + mutation-proved | keep |
+| 2 | Intents named `game:create`, `game:join`, `game:resume`, `host:*`, `leader:*`, `usurp:vote`, `hostages:lock`, `share:*`, `power:use`, `gambler:predict` | wire is `create/join/rejoin/spectate/action` envelope | CONFORM (conflict) |
+| 3 | Every inbound message Zod-validated | hand-rolled JSON check, no zod | CONFORM |
+| 4 | `view` / `share:incoming` / `clock` (every 30 s) server events | `view` only | CONFORM |
+| 5 | SQLite (better-sqlite3) snapshot after every state change, reload on boot | in-memory only; restart ends games | CONFORM |
+| 6 | `/api/health` returns the active game count | `/healthz` returns `ok` | CONFORM |
+| 7 | Rate-limit intents per socket (20/s) and joins per IP | none | CONFORM |
+| 8 | 4-letter codes, unambiguous alphabet, expire at game end, host can lock | alphabet + 4 letters DONE; no lock/expiry | CONFORM |
+| 9 | Real card art from PnP sheets → WebP + `shared/cards/assets.json` + contact sheet | **missing entirely**; UI is text-only | CONFORM (big) |
+| 10 | Card faces: real card back, press-and-hold flip, card share shows the face, colour share shows the cropped team bar, leader card image | text/colour UI only | CONFORM |
+| 11 | One-command `docker compose up -d --build` on :8080, optional Caddy HTTPS profile | no Dockerfile at all | CONFORM |
+| 12 | README: setup, both run modes, how to play, licensing/private-repo note | no README | CONFORM |
+| 13 | systemd user service, no sudo, 0.0.0.0, logs to `~/.hermes/logs/` | not created | CONFORM |
+| 14 | pnpm workspaces `shared/ server/ client/` | npm, single root package | CONFORM (packaging) |
+| 15 | Fastify + Socket.IO | node:http + `ws` | CONFORM (conflict) |
+| 16 | Svelte 5 client | React 19 + Vite | **KEEP — plan explicitly allows React** ("React is fine if you prefer it") |
+| 17 | Screen Wake Lock during a live round | absent | CONFORM (with 9/10) |
+| 18 | Host learns no roles during play | DONE (host view is role-blind) | keep |
+| 19 | 2–3 rounds: 6–10 players = 3 rounds only; >10 may add 5/4-min rounds | DONE | keep |
+| 20 | Delete finished games after 24 h | 12 h idle sweep | CONFORM |
+| 21 | Docker build on Node 22 LTS | local node 26 | use `node:22-slim` in the image |
 
-1. **The leader card's hostage chart contradicts the rulebook's chart.** The leader card carries a finer table
-   (players split 6-10 / 11-13 / 14-17 / 18-21 / 22+, columns 5/4/3/2/1 minutes). The rulebook p.7 table only
-   splits 6-10 / 11-21 / 22+ over the 3/2/1-minute rounds. They **agree** for 6–10 (1/1/1), for 22+ (3/2/1),
-   and for 14–21 across the three basic rounds. They **disagree for 11–13 players**: the leader card says
-   1 hostage in the 3-minute round, the rulebook's lumped 11–21 row says 2.
-   → **Resolution: the leader card wins** (it is the physical card players use at the table, and the rulebook
-   points at it as the authority: "The number of hostages is listed on the leader card and the chart on the
-   next page"). Both tables are recorded in `docs/RULES.md` §4 and the app exposes the leader-card table.
-2. **6–10 players never play the 5- or 4-minute rounds** (leader card: "ONLY 3 ROUNDS … WITHOUT 11 PLAYERS";
-   rulebook: colour reveals and the extra rounds only with more than 10 players). Implemented as a hard rule.
-3. **Only 3 rounds is also the default for 11+**; the 5- and 4-minute rounds are an opt-in advanced option.
-4. **The Drunk card is printed with a "????" team label** (it becomes the "sober" buried card). Recorded as
-   team-unresolved, with the guide's rule (swap at the start of the last round or lose) implemented.
-5. **The two Spy cards**: their card faces are the colour of the *opposite* team. The sheets disagree with a
-   naive reading of the guide's sentence, so the card-face labels are followed — Blue Spy card ⇒ Red
-   allegiance, Red Spy card ⇒ Blue allegiance (guide: "the red Spy has an allegiance to the Red Team, but
-   their card is blue"). Flagged in `docs/RULES.md` §9.
-6. **"Acting" cards (Clown, Mime, Blind, Paparazzo, Demon, Angel…)** have behaviour text but no computable
-   objective; they are Red/Blue cards and win with their team. Reported as `social`, never guessed.
+### Deliberate reconciliations (kept, and why)
 
-## Step 1–3 — build: IN PROGRESS
+- **React over Svelte 5** — the plan names Svelte but adds "React is fine if you prefer it" in the same row.
+  The React client is built, tested and PWA-installed; rewriting it buys nothing. Recorded in `DECISIONS.md`.
+- **The engine is richer than the plan's minimum** (`shared/src/roles.ts` etc. rather than `shared/cards/*`):
+  the plan's `CardDef` fields all have equivalents; the plan's scope does not mention removing anything, so
+  nothing is deleted. The move to `shared/cards/` is done only if it is a pure re-shuffle.
+- **Host screen is not a player seat** — the plan's Lobby row describes the host screen as the shared
+  table screen (code + QR + config). Its own open question ("host as player, default yes") is unresolved by
+  the plan, so the plan's own Lobby/Deal rows are taken as the published reading.
 
-- `docs/SPEC.md` is the build contract (architecture, the cardinal hidden-information rule, the state machine,
-  the test list, the mutation proofs, delivery).
-- Repo initialised locally; pushing to a **private** `Flexingg/TwoRoomsAndABoom`.
-- Coding delegated to Claude Code with `--model opus`.
+## Plan of attack (this run)
 
-### Plan / checkpoints
+1. [x] Step 0 coordination: waited for the run-1 agent to exit before touching the repo.
+2. [ ] `DECISIONS.md` + this file, committed early.
+3. [ ] Opus pass A — server conformance: Zod + plan-native intents + `clock`/`share:incoming` events +
+   rate limiting + code lock/expiry + `/api/health` + SQLite persistence + `host:kick`.
+4. [ ] Opus pass B — card-asset extraction pipeline + physical-card UI + README + Docker Compose.
+5. [ ] systemd user service `tworooms.service`, 0.0.0.0, `~/.hermes/logs/tworooms.log`.
+6. [ ] Real-browser E2E: open the host screen, create a game, join a seat, confirm a role is displayed.
+7. [ ] Mutation-proof the leak + win resolution again on the conformed code; update `MUTATION_PROOF.md`.
+8. [ ] Push to the private remote.
 
-- [x] Step 0 materials + rules write-up
-- [x] Spec + repo skeleton
-- [ ] Engine: roles, deck, hostages, state machine, win resolution
-- [ ] Server: ws, rooms, timers, `viewFor` projection layer
-- [ ] Client: host screen + player screen
-- [ ] Tests incl. the hidden-information property + mutation proofs
-- [ ] systemd user service on :8790, README, GitHub push, browser verification
+## Not yet verified
 
-## Not yet verified / open
-
-- Nothing in the app exists yet at this checkpoint; the rules extraction is the only finished work.
-- `web_extract`/OCR caveat: the leader-card table was read by OCR and confirmed by two independent passes
-  (binarised 8× crop of each row, plus a 300 dpi full-sheet pass). The header row of that table (5/4/3/2/1
-  minutes) was read separately and matches the column order.
+- Step 3 (a real browser run) was NOT completed by run 1 — it wrote `tools/browser_check.mjs` and then hit
+  its usage limit. Nothing below is claimed working until this run loads it in a browser itself.

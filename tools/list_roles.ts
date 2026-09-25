@@ -1,0 +1,10 @@
+import { ROLES } from "../shared/src/roles.js";
+const names = ROLES.map((r) => r.key);
+console.log("total role keys:", names.length);
+console.log(names.join(" "));
+const byTeam: Record<string, string[]> = {};
+for (const r of ROLES) (byTeam[r.team] ??= []).push(r.key);
+for (const [t, ks] of Object.entries(byTeam)) console.log(t.padEnd(6), ks.length, ks.join(" "));
+console.log("\nacting/social:", ROLES.filter((r) => r.acting).map((r) => r.key).join(" "));
+console.log("with engine powers:", ROLES.filter((r) => r.powerKind).map((r) => r.key).join(" "));
+console.log("announcers:", ROLES.filter((r) => r.announcement).map((r) => `${r.key}@${r.announcement!.order}`).join(" "));

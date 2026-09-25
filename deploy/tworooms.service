@@ -1,0 +1,24 @@
+[Unit]
+Description=Two Rooms and a Boom — real-time game server (HTTP + WebSocket on :8790)
+Documentation=https://github.com/Flexingg/TwoRoomsAndABoom
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hermes/repos/TwoRoomsAndABoom
+# `npm start` = node dist-server/index.js, which serves the built client from dist/
+# and upgrades /ws to WebSocket on the same port. Run `npm run build` before restarting.
+Environment=NODE_ENV=production
+Environment=PORT=8790
+Environment=HOST=0.0.0.0
+ExecStartPre=/usr/bin/test -f /home/hermes/repos/TwoRoomsAndABoom/dist/index.html
+ExecStartPre=/usr/bin/test -f /home/hermes/repos/TwoRoomsAndABoom/dist-server/index.js
+ExecStart=/home/hermes/.hermes/node/bin/node /home/hermes/repos/TwoRoomsAndABoom/dist-server/index.js --port 8790 --host 0.0.0.0
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:/home/hermes/.hermes/logs/tworooms.log
+StandardError=append:/home/hermes/.hermes/logs/tworooms.log
+
+[Install]
+WantedBy=default.target
