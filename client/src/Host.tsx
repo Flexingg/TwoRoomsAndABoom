@@ -5,7 +5,7 @@ import { ROLES, roleLabel, type RoleDef } from "../../shared/src/roles";
 import type { RoomId } from "../../shared/src/types";
 import { useGame } from "./useGame";
 import { CardThumb, LeaderCardReference } from "./cardArt";
-import { Btn, ConnBadge, Countdown, ErrorBanner, nameOf, RosterList, Section, TEAM_LABEL, type Live } from "./ui";
+import { Btn, ConnBadge, Countdown, ErrorBanner, nameOf, PreGameLinks, RosterList, Section, TEAM_LABEL, type Live } from "./ui";
 
 export function Host() {
   const { view, status, offset, send, act, forget } = useGame("host");
@@ -30,6 +30,10 @@ export function Host() {
         <a href="/play" className="block text-center text-zinc-400 underline py-2">
           I'm a player — join a game
         </a>
+        <div className="border-t border-zinc-800 pt-4 space-y-2">
+          <p className="text-sm text-zinc-400">Waiting for everyone to turn up?</p>
+          <PreGameLinks />
+        </div>
       </main>
     );
   }

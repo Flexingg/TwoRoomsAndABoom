@@ -22,6 +22,9 @@ export function canPlayFiveRounds(playerCount: number): boolean {
   return playerCount > 10;
 }
 
+/** The leader-card chart's player bands, in order. The single source for the bands the app prints. */
+export const PLAYER_BANDS: ReadonlyArray<{ min: number; max: number }> = CHART.map((r) => ({ min: r.min, max: r.max }));
+
 /** The leader card's row for this player count, as printed, e.g. "14–17 players". */
 export function playerBand(playerCount: number): string {
   const row = CHART.find((r) => playerCount >= r.min && playerCount <= r.max);

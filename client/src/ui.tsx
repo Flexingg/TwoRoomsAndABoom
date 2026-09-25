@@ -57,6 +57,50 @@ export function ErrorBanner({ error }: { error: string | null | undefined }) {
   return <div className="rounded-xl bg-red-950 border border-red-800 text-red-100 px-4 py-3 text-sm">{error}</div>;
 }
 
+/**
+ * The pre-game pages, reachable from a landing screen with no session, no room code and no login —
+ * for the group standing around before the game starts, each on their own phone.
+ */
+export function PreGameLinks({ compact }: { compact?: boolean }) {
+  return (
+    <div className={compact ? "flex gap-2 flex-wrap" : "space-y-2"}>
+      <a
+        href="/how-to-play"
+        className={`block text-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 min-h-[44px] font-semibold active:bg-zinc-800 ${compact ? "flex-1" : ""}`}
+      >
+        How to play
+      </a>
+      <a
+        href="/roles"
+        className={`block text-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 min-h-[44px] font-semibold active:bg-zinc-800 ${compact ? "flex-1" : ""}`}
+      >
+        Roles explorer
+      </a>
+    </div>
+  );
+}
+
+/** The nav strip the two pre-game pages share. */
+export function GuideNav({ page }: { page: "how-to-play" | "roles" }) {
+  const link = (href: string, label: string, here: boolean) => (
+    <a
+      key={href}
+      href={href}
+      className={`rounded-full px-3 py-1.5 text-sm font-semibold whitespace-nowrap ${here ? "bg-zinc-100 text-zinc-900" : "bg-zinc-800 text-zinc-200 border border-zinc-700"}`}
+    >
+      {label}
+    </a>
+  );
+  return (
+    <nav className="flex gap-2 overflow-x-auto pb-1 -mb-1">
+      {link("/", "Start a game", false)}
+      {link("/play", "Join a game", false)}
+      {link("/how-to-play", "How to play", page === "how-to-play")}
+      {link("/roles", "Roles", page === "roles")}
+    </nav>
+  );
+}
+
 export function ConnBadge({ status }: { status: Status }) {
   if (status === "open") return null;
   return (

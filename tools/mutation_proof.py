@@ -137,6 +137,33 @@ MUTATIONS = [
         "a Spy card is printed in the opposite team's colour (RULES.md §9) — the card face is what other "
         "players see, so a flipped colour is a rules bug, not a cosmetic one.",
     ),
+    (
+        "a role is added to the engine and not to the Roles Explorer",
+        "shared/src/roles.ts",
+        '  }),\n];\n\nexport const ROLE_BY_KEY',
+        '  }),\n  role({ key: "guide_test_ghost", name: "Guide Test Ghost", team: "grey", winText: "engine-only mutation" }),\n];\n\nexport const ROLE_BY_KEY',
+        "tests/guide.test.ts",
+        "the drift test's engine -> explorer direction: a role the engine can deal that the explorer has "
+        "no entry for is a card a player can be holding with no way to look it up.",
+    ),
+    (
+        "a role is added to the Roles Explorer and not to the engine",
+        "shared/src/guide.ts",
+        '  zombie: { whatToDo: "Anyone who card or colour shares with you becomes a zombie. Team Zombie wins only if every player still alive at the end is a zombie." },\n};',
+        '  zombie: { whatToDo: "Anyone who card or colour shares with you becomes a zombie. Team Zombie wins only if every player still alive at the end is a zombie." },\n  guide_test_ghost: { whatToDo: "explorer-only mutation" },\n};',
+        "tests/guide.test.ts",
+        "the drift test's explorer -> engine direction: an explorer entry for a card that does not exist "
+        "would send players off to bluff about a role nobody is holding.",
+    ),
+    (
+        "the hostage chart on the How to Play page stops being the engine's chart",
+        "shared/src/guide.ts",
+        "  basic: BASIC_ROUNDS.map((_, i) => hostageCount(b.min, i, 3)),",
+        "  basic: BASIC_ROUNDS.map(() => 1),",
+        "tests/guide.test.ts",
+        "the page's numbers are read from shared/src/hostages.ts: if the page can print a hostage count "
+        "the engine does not use, the guide becomes a second, contradictory rulebook.",
+    ),
 ]
 
 

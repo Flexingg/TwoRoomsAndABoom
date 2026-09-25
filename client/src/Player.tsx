@@ -4,7 +4,7 @@ import { CONDITION_TEXT, ROLES, roleLabel, type CardColor } from "../../shared/s
 import { CardThumb, HeldCard, LeaderCardPanel, ShareReveal, TeamBar } from "./cardArt";
 import { Reveal } from "./Host";
 import { loadSession, useGame, useWakeLock } from "./useGame";
-import { Btn, ConnBadge, Countdown, ErrorBanner, nameOf, PHASE_LABEL, Section, TEAM_LABEL } from "./ui";
+import { Btn, ConnBadge, Countdown, ErrorBanner, nameOf, PHASE_LABEL, PreGameLinks, Section, TEAM_LABEL } from "./ui";
 
 export function Player() {
   const { view, status, offset, send, sendRaw, act, forget } = useGame("player");
@@ -46,6 +46,10 @@ export function Player() {
         <Btn className="w-full" disabled={status !== "open" || code.length !== 4 || !name.trim()} onClick={() => send({ type: "join", code, name })}>
           Join
         </Btn>
+        <div className="border-t border-zinc-800 pt-4 space-y-2">
+          <p className="text-sm text-zinc-400">New to the game? Read this while you wait.</p>
+          <PreGameLinks compact />
+        </div>
       </main>
     );
   }
