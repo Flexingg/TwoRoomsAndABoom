@@ -3,7 +3,10 @@
 // reload-to-rejoin mid-round, and that no WebSocket frame a phone receives before the reveal carries
 // any role key but its own.
 //
-//   node tools/browser_check.mjs [--port 8799] [--shots /tmp/tworooms-shots]
+//   node tools/browser_check.mjs [--port 8799] [--shots /tmp/tworooms-shots] [--attach]
+//
+// --attach joins an already-running server on --port instead of spawning one (and won't kill it), which is
+// how the deployed systemd service on :8790 gets checked.
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -11,6 +14,7 @@ import { chromium } from "playwright";
 const arg = (n, d) => (process.argv.includes(`--${n}`) ? process.argv[process.argv.indexOf(`--${n}`) + 1] : d);
 const PORT = Number(arg("port", 8799));
 const SHOTS = arg("shots", "/tmp/tworooms-shots");
+const ARG_ATTACH = process.argv.includes("--attach");
 const BASE = `http://127.0.0.1:${PORT}`;
 const N = 7;
 mkdirSync(SHOTS, { recursive: true });
@@ -20,11 +24,15 @@ function fail(msg) {
   throw new Error(msg);
 }
 
-const server = spawn("node", ["dist-server/index.js", "--port", String(PORT), "--host", "127.0.0.1"], { stdio: ["ignore", "pipe", "inherit"] });
-await new Promise((resolve, reject) => {
-  server.stdout.on("data", (d) => /listening/.test(String(d)) && resolve());
-  server.on("exit", (c) => reject(new Error(`server exited ${c}`)));
-});
+const server = ARG_ATTACH ? null : spawn("node", ["dist-server/index.js", "--port", String(PORT), "--host", "127.0.0.1"], { stdio: ["ignore", "pipe", "inherit"] });
+if (server) {
+  await new Promise((resolve, reject) => {
+    server.stdout.on("data", (d) => /listening/.test(String(d)) && resolve());
+    server.on("exit", (c) => reject(new Error(`server exited ${c}`)));
+  });
+} else {
+  log("attaching to the already-running server on", BASE);
+}
 
 const browser = await chromium.launch();
 const pages = [];
@@ -153,5 +161,5 @@ try {
   process.exitCode = 1;
 } finally {
   await browser.close();
-  server.kill("SIGTERM");
+  server?.kill("SIGTERM");
 }

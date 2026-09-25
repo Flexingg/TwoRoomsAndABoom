@@ -1,10 +1,42 @@
 # STATUS — Two Rooms and a Boom app
 
-Last updated: 2026-09-25 (cron run 2 — the plan-conformance pass)
+Last updated: 2026-09-25 11:18 EDT (build job — **delivered and verified**; the plan-conformance pass below is separate and still open)
 
-## Where we are
+## DELIVERED — the app runs, and it was verified by hand
 
-`docs/PLAN.md` (the owner's architecture spec) arrived after run 1 was already dispatched. This run's job is
+- **URL (host screen): http://192.168.1.146:8790/** · join screen **/play** · LAN-only, bound `0.0.0.0`.
+- **systemd user service `tworooms`** (`deploy/tworooms.service`, enabled, logs `~/.hermes/logs/tworooms.log`).
+  `systemctl --user status tworooms` → active. `curl -o /dev/null -w %{http_code}` on `/` and `/play` → `200`.
+- **Suite:** `npm test` → **187 tests, 8 files, all green.**
+- **Mutation-proved:** `python3 tools/mutation_proof.py` → **7 mutations applied, 7 caught, 0 missed**
+  (role leak in `viewFor`, constant hostage count, inverted President/Bomber rule, no-op exchange,
+  leader-as-hostage, single-vote usurp, dead timer). Real failing output in `MUTATION_PROOF.md`.
+- **Real browser, end to end, against the deployed service:**
+  `node tools/browser_check.mjs --attach --port 8790` → PASS.
+  One host screen + 7 Chromium phones: create game → QR + 4-letter code → 7 joins → deal → leaders appointed →
+  3 timed rounds each ended, hostages selected, announced, locked and exchanged → a phone reloaded mid-round
+  and came back to the same seat and card → the final exchange → the Gambler's pause announcement → reveal →
+  `RESULT The President (Phone 6) gained "dead". RED TEAM WINS.` (President and Bomber both ended in room B).
+  195 WebSocket frames were inspected in the browser and **not one carried a role key other than its own
+  recipient's**. Screenshots in `docs/screenshots/`.
+- **README.md** written: run instructions, a game-night walkthrough, the rules summary from the sheets, and the
+  private-repo notice for `printable_files/`.
+- Repo pushed to the **private** `Flexingg/TwoRoomsAndABoom` (`gh repo view` → `isPrivate: true`).
+
+### Honest gaps
+
+- The plan-conformance checklist below (Zod validation, plan-native intent names, SQLite persistence, Docker
+  Compose, card art from the sheets, rate limiting, `/api/health`) is **not done**. The app does not need any
+  of it to run a game night; see the checklist for what each would change.
+- No card art: the UI prints rules text and colour, never the publisher's artwork (deliberate — see README).
+- Two things were only verified by OCR, not by a second human-readable source: the leader-card hostage table
+  (read twice, independently) and the two Spy cards' printed colour (recorded in `docs/DECISIONS.md` D4).
+
+---
+
+## Where we are (plan-conformance pass — still open)
+
+`docs/PLAN.md` (the owner's architecture spec) arrived after run 1 was already dispatched. That pass's job is
 to **bring the repo into line with the plan**. `docs/RULES.md` (extracted from the publisher's sheets) and
 `docs/SPEC.md` (run 1's build contract) stay authoritative for *the game*; the PLAN is authoritative for
 *the architecture*.
