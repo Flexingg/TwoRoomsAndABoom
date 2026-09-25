@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import type { Action, PlayerView, RosterEntry } from "../../shared/src/protocol";
 import { CONDITION_TEXT, ROLES, roleLabel } from "../../shared/src/roles";
 import { Reveal } from "./Host";
-import { loadSession, useGame } from "./useGame";
+import { loadSession, useGame, useWakeLock } from "./useGame";
 import { Btn, CardView, COLOR_BG, ConnBadge, Countdown, ErrorBanner, nameOf, PHASE_LABEL, Section, TEAM_LABEL } from "./ui";
 
 export function Player() {
-  const { view, status, offset, send, act, forget } = useGame("player");
+  const { view, status, offset, send, sendRaw, act, forget } = useGame("player");
+  // PLAN.md "Reconnection": keep the screen awake while a round is live.
+  useWakeLock(!!view && view.kind !== "none" && view.phase === "ROUND_ACTIVE");
   const params = new URLSearchParams(window.location.search);
   const [code, setCode] = useState(params.get("code")?.toUpperCase() ?? "");
   const [name, setName] = useState("");
@@ -46,7 +48,7 @@ export function Player() {
       </main>
     );
   }
-  return <Game view={view} offset={offset} act={act} status={status} forget={forget} />;
+  return <Game view={view} offset={offset} act={act} sendRaw={sendRaw} status={status} forget={forget} />;
 }
 
 type Picking = { power: string; label: string; need: number; picked: string[] };
@@ -60,7 +62,7 @@ const TARGET_POWERS: Record<string, { label: string; need: number }> = {
   security: { label: "TACKLE: pick a player who can't be a hostage this round", need: 1 },
 };
 
-function Game({ view, offset, act, status, forget }: { view: PlayerView; offset: number; act: (a: Action) => void; status: ReturnType<typeof useGame>["status"]; forget: () => void }) {
+function Game({ view, offset, act, sendRaw, status, forget }: { view: PlayerView; offset: number; act: (a: Action) => void; sendRaw: (w: Record<string, unknown>) => void; status: ReturnType<typeof useGame>["status"]; forget: () => void }) {
   const you = view.you;
   const [showCard, setShowCard] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
@@ -159,7 +161,7 @@ function Game({ view, offset, act, status, forget }: { view: PlayerView; offset:
       )}
 
       {/* ------------------------------------------------ announcements */}
-      {you.mustAnnounce && <Announce view={view} act={act} />}
+      {you.mustAnnounce && <Announce view={view} act={act} sendRaw={sendRaw} />}
       {view.phase === "PAUSE_ANNOUNCE" && !you.mustAnnounce && (
         <Section>
           <p>{PHASE_LABEL.PAUSE_ANNOUNCE}. Don't reveal yet — wait for the host.</p>
@@ -172,7 +174,7 @@ function Game({ view, offset, act, status, forget }: { view: PlayerView; offset:
       )}
 
       {/* ------------------------------------------------ leader: hostages */}
-      {view.phase === "ROUND_END_SELECT" && you.isLeader && r && <HostagePicker view={view} act={act} />}
+      {view.phase === "ROUND_END_SELECT" && you.isLeader && r && <HostagePicker view={view} act={act} sendRaw={sendRaw} />}
       {view.phase === "ROUND_END_SELECT" && !you.isLeader && r && (
         <Section title="Hostages">
           {r.hostages.length ? (
@@ -430,7 +432,7 @@ function MateRow(props: {
   );
 }
 
-function HostagePicker({ view, act }: { view: PlayerView; act: (a: Action) => void }) {
+function HostagePicker({ view, act, sendRaw }: { view: PlayerView; act: (a: Action) => void; sendRaw: (w: Record<string, unknown>) => void }) {
   const r = view.myRoom!;
   const n = r.hostageCount;
   const [picked, setPicked] = useState<string[]>(r.hostages);
@@ -469,7 +471,7 @@ function HostagePicker({ view, act }: { view: PlayerView; act: (a: Action) => vo
             <Btn small kind="ghost" disabled={picked.length !== n || synced} onClick={() => act({ type: "leader:selectHostages", ids: picked })}>
               Announce to the room
             </Btn>
-            <Btn small disabled={!synced || r.hostages.length !== n} onClick={() => act({ type: "leader:lockHostages" })}>
+            <Btn small disabled={!synced || r.hostages.length !== n} onClick={() => sendRaw({ type: "hostages:lock", playerIds: r.hostages })}>
               Lock in (final)
             </Btn>
           </div>
@@ -479,10 +481,13 @@ function HostagePicker({ view, act }: { view: PlayerView; act: (a: Action) => vo
   );
 }
 
-function Announce({ view, act }: { view: PlayerView; act: (a: Action) => void }) {
+function Announce({ view, act, sendRaw }: { view: PlayerView; act: (a: Action) => void; sendRaw: (w: Record<string, unknown>) => void }) {
   const kind = view.you.mustAnnounce!;
   const [role, setRole] = useState(ROLES[0].key);
-  const say = (value: string) => act({ type: "player:announce", value });
+  // The Gambler's call is the plan's `gambler:predict`; Private Eye and Sniper announce under the engine's
+  // own validated action (the plan's table has no name for them).
+  const say = (value: string) =>
+    kind === "team_call" ? sendRaw({ type: "gambler:predict", team: value }) : act({ type: "player:announce", value });
   return (
     <Section title="Your announcement — the game is paused for you">
       {kind === "team_call" && (

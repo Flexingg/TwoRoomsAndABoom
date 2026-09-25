@@ -1,10 +1,14 @@
-// HTTP (the built client, with SPA fallback) + WebSocket (/ws) on one port.
+// HTTP (the built client, with SPA fallback, the health check and the API) + WebSocket (/ws) on one port.
+//
+// Every inbound frame goes through `parseWire()` (shared/src/intents.ts): Zod-checked, then translated to
+// engine actions. Nothing else in the server parses JSON. Every outbound frame is either a view minted by
+// viewFor() or one of the state-free events from PLAN.md's protocol table.
 
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
-import type { Action, ClientMessage } from "../../shared/src/protocol.js";
+import { parseWire } from "../../shared/src/intents.js";
 import { addPlayer, GameError, viewerForToken } from "../../shared/src/state.js";
 import { viewFor } from "../../shared/src/view.js";
 import { Connection } from "./connection.js";
@@ -21,10 +25,15 @@ const TYPES: Record<string, string> = {
   ".webmanifest": "application/manifest+json",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".webp": "image/webp",
   ".ico": "image/x-icon",
   ".txt": "text/plain; charset=utf-8",
   ".woff2": "font/woff2",
 };
+
+/** PLAN.md "Security": stop code guessing. A phone that joins once every few seconds is nowhere near this. */
+const JOIN_ATTEMPTS_PER_IP = 20;
+const JOIN_WINDOW_MS = 60_000;
 
 export interface AppOptions {
   port: number;
@@ -32,6 +41,8 @@ export interface AppOptions {
   distDir: string | null;
   clock?: Clock;
   seed?: number;
+  /** SQLite snapshot file. Omitted (or ":memory:") = games live in memory only. */
+  dbPath?: string | null;
 }
 
 export interface App {
@@ -82,25 +93,30 @@ function serveStatic(distDir: string | null, req: IncomingMessage, res: ServerRe
   else createReadStream(file).pipe(res);
 }
 
-function isAction(a: unknown): a is Action {
-  return typeof a === "object" && a !== null && typeof (a as { type?: unknown }).type === "string";
-}
-
-function parse(raw: string): ClientMessage | null {
-  try {
-    const m = JSON.parse(raw) as ClientMessage;
-    if (typeof m !== "object" || m === null || typeof m.type !== "string") return null;
-    if (m.type === "action" && !isAction(m.action)) return null;
-    return m;
-  } catch {
-    return null;
-  }
-}
-
 export function createApp(opts: AppOptions): Promise<App> {
   const clock = opts.clock ?? realClock;
-  const store = new Store(opts.seed, clock);
-  const http = createHttpServer((req, res) => serveStatic(opts.distDir, req, res));
+  const store = new Store(opts.seed, clock, opts.dbPath ?? null);
+  const startedAt = clock.now();
+  const joinAttempts = new Map<string, { n: number; resetAt: number }>();
+
+  const http = createHttpServer((req, res) => {
+    // The plan's health check reports the active game count.
+    if ((req.url ?? "").split("?")[0] === "/api/health") {
+      res
+        .writeHead(200, { "content-type": "application/json" })
+        .end(
+          JSON.stringify({
+            ok: true,
+            games: store.activeCount(),
+            players: store.playerCount(),
+            gamesTotal: store.rooms.size,
+            uptimeSec: Math.round((clock.now() - startedAt) / 1000),
+          }),
+        );
+      return;
+    }
+    serveStatic(opts.distDir, req, res);
+  });
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
 
   http.on("upgrade", (req, socket, head) => {
@@ -111,58 +127,101 @@ export function createApp(opts: AppOptions): Promise<App> {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
   });
 
-  wss.on("connection", (ws: WebSocket) => {
+  /** Join attempts per IP, so a 4-letter code can't be guessed (PLAN.md "Security"). */
+  function joinAllowed(ip: string, now: number): boolean {
+    const entry = joinAttempts.get(ip);
+    if (!entry || now > entry.resetAt) {
+      joinAttempts.set(ip, { n: 1, resetAt: now + JOIN_WINDOW_MS });
+      return true;
+    }
+    entry.n += 1;
+    return entry.n <= JOIN_ATTEMPTS_PER_IP;
+  }
+
+  wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const conn = new Connection(ws);
+    const ip = String(req.socket.remoteAddress ?? "?");
     const noGame = (error: string) => conn.send(viewFor({ kind: "spectator" }, null, clock.now(), error));
+
     ws.on("pong", () => (conn.alive = true));
 
     ws.on("message", (data) => {
-      const msg = parse(String(data));
-      if (!msg) return noGame("Malformed message.");
+      const now = clock.now();
+      if (!conn.takeToken(now)) {
+        noGame("Slow down — too many messages at once.");
+        return;
+      }
       const current = conn.code ? store.get(conn.code) : undefined;
+      const meId = conn.viewer?.kind === "player" ? conn.viewer.id : null;
+      const parsed = parseWire(String(data), meId, { pendingOffer: (id) => current?.pendingOffer(id) ?? null });
+      if (!parsed.ok) {
+        noGame(parsed.error);
+        return;
+      }
 
-      switch (msg.type) {
+      switch (parsed.cmd.kind) {
         case "create": {
           if (current) current.detach(conn);
           const room = store.create();
           room.attach(conn, { kind: "host" });
+          if (parsed.cmd.config && Object.keys(parsed.cmd.config).length) {
+            room.act(conn, { type: "host:setOptions", options: parsed.cmd.config });
+          }
           return;
         }
         case "join": {
-          const room = store.get(String(msg.code ?? ""));
-          if (!room) return noGame(`No game with code “${String(msg.code ?? "").toUpperCase()}”.`);
+          if (!joinAllowed(ip, now)) {
+            noGame("Too many join attempts from this device — wait a minute and try again.");
+            return;
+          }
+          const room = store.get(parsed.cmd.code);
+          if (!room) {
+            noGame(`No game with code “${parsed.cmd.code}”.`);
+            return;
+          }
           try {
-            const seat = addPlayer(room.state, String(msg.name ?? ""), cryptoRng, clock.now());
+            const seat = addPlayer(room.state, parsed.cmd.name, cryptoRng, now);
             if (current) current.detach(conn);
             room.attach(conn, { kind: "player", id: seat.id });
+            room.onChange?.(room);
           } catch (e) {
-            if (e instanceof GameError) return noGame(e.message);
+            if (e instanceof GameError) {
+              noGame(e.message);
+              return;
+            }
             throw e;
           }
           return;
         }
-        case "rejoin": {
-          const room = store.get(String(msg.code ?? ""));
-          const viewer = room ? viewerForToken(room.state, String(msg.token ?? "")) : null;
-          if (!room || !viewer) return noGame("That game or seat no longer exists.");
+        case "resume": {
+          const room = store.get(parsed.cmd.code);
+          const viewer = room ? viewerForToken(room.state, parsed.cmd.token) : null;
+          if (!room || !viewer) {
+            noGame("That game or seat no longer exists.");
+            return;
+          }
           if (current && current !== room) current.detach(conn);
           room.attach(conn, viewer);
           return;
         }
         case "spectate": {
-          const room = store.get(String(msg.code ?? ""));
-          if (!room) return noGame(`No game with code “${String(msg.code ?? "").toUpperCase()}”.`);
+          const room = store.get(parsed.cmd.code);
+          if (!room) {
+            noGame(`No game with code “${parsed.cmd.code}”.`);
+            return;
+          }
           if (current) current.detach(conn);
           room.attach(conn, { kind: "spectator" });
           return;
         }
-        case "action": {
-          if (!current) return noGame("Join a game first.");
-          current.act(conn, msg.action);
+        case "act": {
+          if (!current) {
+            noGame("Join a game first.");
+            return;
+          }
+          for (const action of parsed.cmd.actions) current.act(conn, action);
           return;
         }
-        default:
-          return noGame("Unknown message.");
       }
     });
 
@@ -172,8 +231,11 @@ export function createApp(opts: AppOptions): Promise<App> {
     });
   });
 
-  // Drop dead sockets so a vanished phone shows as disconnected (the round keeps running regardless).
+  // Drop dead sockets so a vanished phone shows as disconnected (the round keeps running regardless), and
+  // send PLAN.md's `clock` — the server's epoch ms — every 30 s so each phone can count down from the
+  // absolute `roundEndsAt` without any per-second traffic.
   const heartbeat = setInterval(() => {
+    const now = clock.now();
     for (const room of store.rooms.values()) {
       for (const c of room.conns) {
         if (!c.alive) {
@@ -183,8 +245,10 @@ export function createApp(opts: AppOptions): Promise<App> {
         }
         c.alive = false;
         c.ping();
+        c.sendEvent({ t: "clock", now });
       }
     }
+    store.sweep();
   }, 30_000);
   heartbeat.unref();
 

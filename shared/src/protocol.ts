@@ -23,6 +23,10 @@ import type {
 export type Action =
   | { type: "host:setOptions"; options: Partial<GameOptions> }
   | { type: "host:start" }
+  /** Plan protocol: the host locks the join code once everyone is in. */
+  | { type: "host:lockCode"; locked: boolean }
+  /** Plan protocol: remove a seat from the lobby. */
+  | { type: "host:kick"; playerId: PlayerId }
   | { type: "host:assignRooms"; mode: "random" }
   | { type: "host:assignRooms"; mode: "swap"; a: PlayerId; b: PlayerId }
   | { type: "host:initialLeader"; room: RoomId; playerId: PlayerId }
@@ -59,6 +63,17 @@ export type ClientMessage =
   | { type: "rejoin"; code: string; token: string }
   | { type: "spectate"; code: string }
   | { type: "action"; action: Action };
+
+// ---- server -> client events ------------------------------------------------------------------------
+//
+// PLAN.md names three server events: `view`, `share:incoming` and `clock`. `view` is the only one that can
+// carry game state (it is minted by viewFor). The other two are deliberately incapable of leaking: a clock
+// event is a bare number, and a share prompt carries only the ids the target already sees in its own
+// roster. Keeping them in a separate, state-free type means adding an event can never open a second path
+// for a role to reach a phone.
+export type ServerEvent =
+  | { t: "clock"; now: number }
+  | { t: "share:incoming"; offerId: string; from: PlayerId; kind: ShareKind };
 
 // ---- views ----------------------------------------------------------------------------------------
 
@@ -180,6 +195,8 @@ interface ViewCommon {
   roundEndsAt: number | null;
   playerCount: number;
   colorShareEnabled: boolean;
+  /** Plan "Security": the host closed the join code. */
+  codeLocked: boolean;
   roster: RosterEntry[];
   leaders: Record<RoomId, PlayerId | null>;
   rooms: RoomStatus[];

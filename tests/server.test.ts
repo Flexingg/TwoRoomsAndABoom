@@ -10,7 +10,13 @@ import { Room, type Clock } from "../server/src/room.js";
 import { seededRng } from "../shared/src/rng.js";
 import { checkPayload, Knowledge } from "./leakcheck.js";
 
-type AnyView = { kind: string; [k: string]: unknown };
+type AnyView = { kind?: string; t?: string; [k: string]: unknown };
+
+/** PLAN.md's state-free server events. They must never carry anything but these keys. */
+const EVENT_KEYS: Record<string, string[]> = {
+  clock: ["now", "t"],
+  "share:incoming": ["offerId", "from", "kind", "t"],
+};
 
 class Client {
   ws: WebSocket;
@@ -25,17 +31,24 @@ class Client {
       const raw = String(d);
       this.frames.push(raw);
       const v = JSON.parse(raw) as AnyView;
+      if (typeof v.t === "string" && !v.kind) return; // a `clock` / `share:incoming` event, not a view
       this.waiters = this.waiters.filter((w) => (w.pred(v) ? (w.done(v), false) : true));
     });
   }
   send(m: ClientMessage) {
     this.ws.send(JSON.stringify(m));
   }
+  /** Every frame this socket received that is a view (events are checked separately). */
+  views(): AnyView[] {
+    return this.frames
+      .map((f) => JSON.parse(f) as AnyView)
+      .filter((v) => typeof v.t !== "string" || !!v.kind);
+  }
   last(): AnyView {
-    return JSON.parse(this.frames[this.frames.length - 1]) as AnyView;
+    return this.views()[this.views().length - 1];
   }
   until<T extends AnyView = AnyView>(pred: (v: AnyView) => boolean, ms = 2000): Promise<T> {
-    const hit = this.frames.map((f) => JSON.parse(f) as AnyView).reverse().find(pred);
+    const hit = this.views().reverse().find(pred);
     if (hit) return Promise.resolve(hit as T);
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => reject(new Error(`timed out; last frame: ${this.frames.at(-1)}`)), ms);
@@ -181,23 +194,35 @@ describe("server over WebSockets", () => {
     const state = app.store.get(code)!.state;
     const know = new Knowledge(); // no reveals or shares happened
     let frames = 0;
+    let events = 0;
+    /**
+     * A frame is either a view (must pass the hidden-information check) or one of PLAN.md's state-free
+     * events (must contain nothing but the handful of keys the protocol allows — enforced exactly, so an
+     * event can never become a side channel).
+     */
+    const checkFrame = (viewer: { kind: "host" } | { kind: "spectator" } | { kind: "player"; id: string }, f: string) => {
+      frames++;
+      const parsed = JSON.parse(f) as { t?: string; kind?: string };
+      if (typeof parsed.t === "string" && !parsed.kind) {
+        events++;
+        expect(Object.keys(parsed).sort(), `event frame ${f}`).toEqual(EVENT_KEYS[parsed.t]);
+        return;
+      }
+      expect(checkPayload(viewer, f, state, know).violations).toEqual([]);
+    };
     for (const p of players) {
       const id = pv(p).you.id;
-      for (const f of p.frames) {
-        frames++;
-        expect(checkPayload({ kind: "player", id }, f, state, know).violations).toEqual([]);
-      }
+      for (const f of p.frames) checkFrame({ kind: "player", id }, f);
     }
     for (const [viewer, c] of [
       [{ kind: "host" as const }, host],
       [{ kind: "spectator" as const }, spectator],
     ] as const) {
-      for (const f of c.frames) {
-        frames++;
-        expect(checkPayload(viewer, f, state, know).violations).toEqual([]);
-      }
+      for (const f of c.frames) checkFrame(viewer, f);
     }
     expect(frames).toBeGreaterThan(50);
+    // The server sends `clock` (PLAN.md "Timer sync") on connect, so every socket must have seen one.
+    expect(events).toBeGreaterThan(0);
     // And no frame anywhere contains another seat's token.
     const tokens = Object.keys(secretsOf(state).tokens);
     for (const p of players) {

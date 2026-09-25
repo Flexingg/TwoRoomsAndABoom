@@ -16,7 +16,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 // dist-server/index.js -> ../dist ; server/src/index.ts (dev) -> ../../dist
 const distDir = [resolve(here, "..", "dist"), resolve(here, "..", "..", "dist")].find((d) => existsSync(resolve(d, "index.html"))) ?? null;
 
-const app = await createApp({ port, host, distDir });
+const app = await createApp({
+  port,
+  host,
+  distDir,
+  // PLAN.md "Persistence": snapshot to SQLite after every state change and reload unfinished games on boot.
+  dbPath: process.env.DB_PATH ?? resolve(process.cwd(), "data", "games.db"),
+});
 console.log(`[tworooms] listening on http://${host}:${app.port()}  (client: ${distDir ?? "not built"})`);
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {

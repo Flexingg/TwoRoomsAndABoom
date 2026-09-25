@@ -47,7 +47,7 @@ function token(rng: Rng): string {
   return s;
 }
 
-export function createGame(code: string, rng: Rng): ServerGameState {
+export function createGame(code: string, rng: Rng, now = 0): ServerGameState {
   const secrets: Secrets = {
     players: {},
     buried: null,
@@ -63,6 +63,9 @@ export function createGame(code: string, rng: Rng): ServerGameState {
     phase: "LOBBY",
     options: { ...DEFAULT_OPTIONS, includeRoles: [] },
     players: [],
+    codeLocked: false,
+    createdAt: now,
+    endedAt: null,
     effectivePlayerCount: 0,
     roundMinutes: [],
     roundIndex: -1,
@@ -96,6 +99,7 @@ export function hostToken(s: ServerGameState): string {
 
 export function addPlayer(s: ServerGameState, name: string, rng: Rng, now: number): { id: PlayerId; token: string } {
   if (s.phase !== "LOBBY") fail("This game has already started. Ask the host to reset it, or rejoin with your saved seat.");
+  if (s.codeLocked) fail("The host has locked this game. Ask them to unlock the code, or rejoin with your saved seat.");
   const clean = name.trim().replace(/\s+/g, " ").slice(0, 24);
   if (!clean) fail("Enter a name.");
   if (s.players.some((p) => p.name.toLowerCase() === clean.toLowerCase())) fail(`The name “${clean}” is taken.`);
@@ -608,6 +612,28 @@ export function apply(s: ServerGameState, actor: Actor, action: Action, now: num
       log(s, now, who, action.type, { options: next });
       return;
     }
+    /** Plan "Security": lock the join code once everyone is in; joins are refused from then on. */
+    case "host:lockCode": {
+      requireHost(actor);
+      if (s.phase !== "LOBBY") fail("The join code can only be locked in the lobby.");
+      s.codeLocked = !!action.locked;
+      log(s, now, who, action.type, { locked: s.codeLocked });
+      return;
+    }
+    /** Plan protocol `host:kick` — remove a seat (lobby only; mid-game a phone just reconnects). */
+    case "host:kick": {
+      requireHost(actor);
+      if (s.phase !== "LOBBY") fail("You can only remove a player in the lobby.");
+      const gone = player(s, action.playerId);
+      s.players = s.players.filter((p) => p.id !== gone.id);
+      for (const [t, id] of Object.entries(sec.tokens)) if (id === gone.id) delete sec.tokens[t];
+      delete sec.players[gone.id];
+      delete sec.knowledge[gone.id];
+      delete sec.notices[gone.id];
+      delete s.errors[gone.id];
+      log(s, now, who, action.type, { playerId: gone.id, name: gone.name });
+      return;
+    }
     case "host:start": {
       requireHost(actor);
       if (s.phase !== "LOBBY") fail("The game has already started.");
@@ -979,6 +1005,8 @@ export function apply(s: ServerGameState, actor: Actor, action: Action, now: num
         s.phase = "REVEAL";
       } else if (s.phase === "REVEAL") {
         s.phase = "RESULT";
+        // The join code expires once the game is over (plan "Security"), and the game is swept 24 h later.
+        s.endedAt = now;
       } else {
         fail("The reveal comes after the final exchange.");
       }
@@ -1145,8 +1173,8 @@ function assignRandomRooms(s: ServerGameState, rng: Rng): void {
 
 function resetToLobby(s: ServerGameState, now: number): void {
   const sec = secretsOf(s);
-  const fresh = createGame(s.code, () => 0.5);
-  const keep = { code: s.code, players: s.players, options: s.options, seq: s.seq, nextId: s.nextId };
+  const fresh = createGame(s.code, () => 0.5, now);
+  const keep = { code: s.code, players: s.players, options: s.options, seq: s.seq, nextId: s.nextId, createdAt: s.createdAt };
   Object.assign(s, fresh, keep);
   s.players.forEach((p) => {
     p.room = null;

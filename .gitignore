@@ -6,3 +6,4 @@ dist-server/
 *.log
 .vite/
 coverage/
+data/

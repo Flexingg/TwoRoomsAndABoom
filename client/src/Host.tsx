@@ -115,7 +115,21 @@ function Lobby({ view, act, joinUrl }: { view: HostView; act: (a: Action) => voi
         </div>
       </Section>
       <Section title={`Players (${view.roster.length})`}>
-        {view.roster.length === 0 ? <p className="text-zinc-400">Waiting for players…</p> : <RosterList roster={view.roster} />}
+        {view.roster.length === 0 ? <p className="text-zinc-400">Waiting for players…</p> : (
+          <RosterList
+            roster={view.roster}
+            render={(r) => (
+              <Btn small kind="ghost" onClick={() => act({ type: "host:kick", playerId: r.id })}>
+                Remove
+              </Btn>
+            )}
+          />
+        )}
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <Btn small kind={view.codeLocked ? "primary" : "ghost"} onClick={() => act({ type: "host:lockCode", locked: !view.codeLocked })}>
+            {view.codeLocked ? "Code locked — nobody else can join" : "Lock the code once everyone's in"}
+          </Btn>
+        </div>
       </Section>
       <Section title="Game" className="md:col-span-2">
         <div className="flex flex-wrap gap-2">

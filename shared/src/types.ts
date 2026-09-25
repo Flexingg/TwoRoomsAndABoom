@@ -134,6 +134,12 @@ export interface ServerGameState {
   phase: Phase;
   options: GameOptions;
   players: ServerPlayer[];
+  /** Plan "Security": the host can lock the join code once everyone is in. */
+  codeLocked: boolean;
+  /** Server epoch ms the game was created — the plan's 24 h cleanup is measured on this too. */
+  createdAt: number;
+  /** Server epoch ms the game reached RESULT; the code expires and the game is swept 24 h later. */
+  endedAt: number | null;
   /** Player count for the chart and thresholds (Ambassadors excluded). Set at start. */
   effectivePlayerCount: number;
   roundMinutes: number[];

@@ -100,6 +100,8 @@ function common(s: ServerGameState, viewerKey: string, now: number) {
     roundEndsAt: s.roundEndsAt,
     playerCount: s.phase === "LOBBY" ? s.players.length : s.effectivePlayerCount,
     colorShareEnabled: s.phase !== "LOBBY" && colorShareEnabled(s),
+    /** The host's code lock (plan "Security"). Public: everyone can see the code is closed. */
+    codeLocked: s.codeLocked,
     roster: roster(s),
     leaders: { ...s.leaders },
     rooms: roomStatus(s),
