@@ -221,3 +221,56 @@ AssertionError: expected false to be true // Object.is equality
 ## Verdict
 
 7 mutations applied; **7 caught, 0 missed**.
+
+## Mutation 8 — `viewFor` leaks, proved end to end on the wire
+
+The seven mutations above are unit-level. This one is the same leak as mutation 1, but proved through the
+real server: build a leaking `dist-server`, start it on :8799, and point the independent raw-WebSocket check
+(`tools/wire_leak_check.mjs` — written by the reviewing pass, not the coding agent) at it.
+
+```
+$ bash tools/wire_mutation_proof.sh
+== applying the leak to shared/src/view.ts
+== rebuilding the leaking server
+== starting it on :8799
+== running the wire check against the leaking server (this MUST fail)
+
+  FAIL Ann has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+  FAIL Bo has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+  FAIL Cy has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+  FAIL Di has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+  FAIL Ed has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+  FAIL Fi has only its own role key on the wire (saw blue_team,red_team,president,bomber)
+  FAIL the host learned no role keys on the deal (saw blue_team,red_team,president,bomber)
+  FAIL Cy saw exactly its own card and Ann's (saw blue_team,red_team,president,bomber)
+  FAIL Bo's frames mention no role key but its own (saw blue_team,red_team,president,bomber)
+  FAIL Di's frames mention no role key but its own (saw blue_team,red_team,president,bomber)
+  FAIL the host still learned no role keys after the private reveal
+  FAIL Bo's frames still mention no role key but its own
+  FAIL Di's frames still mention no role key but its own
+  FAIL the host screen learned no role keys through the whole sequence (saw blue_team,red_team,president,bomber)
+
+FAILED: 14
+wire check exit code: 1
+caught: the wire check fails when viewFor leaks.
+```
+
+Every client *and the host screen* came back holding all four role keys of the other players
+(`blue_team,red_team,president,bomber`), which is exactly the failure the cardinal rule forbids. The script
+then reverts `view.ts` and rebuilds, so the deployed service is unaffected.
+
+## Verdict (all eight)
+
+| # | Mutation | Caught by |
+|---|----------|-----------|
+| 1 | `viewFor` leaks every role into the roster | `tests/hidden-info.test.ts` |
+| 2 | `hostageCount` returns a constant | `tests/hostages.test.ts` |
+| 3 | President/Bomber rule inverted | `tests/win.test.ts` |
+| 4 | The exchange moves nobody | `tests/exchange.test.ts` |
+| 5 | The leader may select itself | `tests/exchange.test.ts` |
+| 6 | One vote usurps instead of a majority | `tests/leaders.test.ts` |
+| 7 | The round timer never expires | `tests/timer.test.ts` |
+| 8 | The same leak as #1, on the wire | `tools/wire_leak_check.mjs` |
+
+7 of 7 unit mutations caught by `python3 tools/mutation_proof.py`; the wire mutation caught by
+`bash tools/wire_mutation_proof.sh`. **0 missed.**

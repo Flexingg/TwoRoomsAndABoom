@@ -158,7 +158,11 @@ to settle the 11–13-player band where the card and the rulebook disagree.
 
 ```bash
 npm test                                  # 187 tests, 8 files
-python3 tools/mutation_proof.py           # break a rule, watch the test catch it
+python3 tools/mutation_proof.py           # break a rule, watch the test catch it  (7/7 caught)
 node tools/browser_check.mjs              # a real Chromium: host + 7 phones play a whole game
-node tools/browser_check.mjs --attach --port 8790   # same, against the running service
+node tools/browser_check.mjs --attach --port 8790   # the same, against the running service
+node tools/wire_leak_check.mjs --port 8790          # raw WebSocket: a reveal leaks only to its two parties
+bash tools/wire_mutation_proof.sh                   # ...and that check fails against a leaking build
 ```
+
+`MUTATION_PROOF.md` holds the real failing output for all eight mutations.

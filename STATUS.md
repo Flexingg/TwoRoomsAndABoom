@@ -10,7 +10,10 @@ Last updated: 2026-09-25 11:18 EDT (build job — **delivered and verified**; th
 - **Suite:** `npm test` → **187 tests, 8 files, all green.**
 - **Mutation-proved:** `python3 tools/mutation_proof.py` → **7 mutations applied, 7 caught, 0 missed**
   (role leak in `viewFor`, constant hostage count, inverted President/Bomber rule, no-op exchange,
-  leader-as-hostage, single-vote usurp, dead timer). Real failing output in `MUTATION_PROOF.md`.
+  leader-as-hostage, single-vote usurp, dead timer), plus an eighth at the wire level:
+  `bash tools/wire_mutation_proof.sh` builds a leaking server, and the independent raw-WebSocket check
+  `node tools/wire_leak_check.mjs` catches it (every client and the host end up holding all four other role
+  keys). Real failing output for all eight in `MUTATION_PROOF.md`.
 - **Real browser, end to end, against the deployed service:**
   `node tools/browser_check.mjs --attach --port 8790` → PASS.
   One host screen + 7 Chromium phones: create game → QR + 4-letter code → 7 joins → deal → leaders appointed →
