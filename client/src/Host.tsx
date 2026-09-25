@@ -4,7 +4,8 @@ import type { Action, HostView } from "../../shared/src/protocol";
 import { ROLES, roleLabel, type RoleDef } from "../../shared/src/roles";
 import type { RoomId } from "../../shared/src/types";
 import { useGame } from "./useGame";
-import { Btn, CardView, ConnBadge, Countdown, ErrorBanner, nameOf, RosterList, Section, TEAM_LABEL, type Live } from "./ui";
+import { CardThumb, LeaderCardReference } from "./cardArt";
+import { Btn, ConnBadge, Countdown, ErrorBanner, nameOf, RosterList, Section, TEAM_LABEL, type Live } from "./ui";
 
 export function Host() {
   const { view, status, offset, send, act, forget } = useGame("host");
@@ -283,6 +284,14 @@ function Rounds({ view, act, offset }: { view: HostView; act: (a: Action) => voi
         <div className="mt-2 text-center text-zinc-300">
           {view.rooms[0].hostageCount !== null && `Each leader sends ${view.rooms[0].hostageCount} hostage${view.rooms[0].hostageCount === 1 ? "" : "s"} this round.`}
         </div>
+        <div className="mt-4 flex justify-center">
+          <LeaderCardReference
+            roundIndex={view.roundIndex}
+            roundMinutes={view.roundMinutes}
+            playerCount={view.playerCount}
+            hostageCount={view.rooms[0].hostageCount}
+          />
+        </div>
         <div className="mt-4 flex justify-center gap-2 flex-wrap">
           {view.phase === "ROUND_ACTIVE" && (
             <Btn kind="ghost" onClick={() => act({ type: "host:endRoundEarly" })}>
@@ -414,7 +423,11 @@ export function Reveal({ view, act }: { view: Live; act?: (a: Action) => void })
                       {nameOf(view, p.id)}
                       {r && <span className={`ml-1 ${r.outcome === "win" ? "text-emerald-300" : r.outcome === "lose" ? "text-zinc-500" : "text-amber-300"}`}>{r.outcome === "win" ? "WIN" : r.outcome === "lose" ? "lose" : "table decides"}</span>}
                     </div>
-                    <CardView card={p} compact />
+                    <CardThumb roleKey={p.roleKey} alt={`${p.roleName}, ${p.team}`} />
+                    <div className="text-sm font-semibold">
+                      {p.roleName}
+                      <span className="ml-1 text-xs font-normal text-zinc-400">{TEAM_LABEL[p.team]}</span>
+                    </div>
                     {p.conditions.length > 0 && <div className="text-xs text-zinc-400">{p.conditions.join(", ")}</div>}
                   </div>
                 );
@@ -426,7 +439,11 @@ export function Reveal({ view, act }: { view: Live; act?: (a: Action) => void })
       {reveal.buried && (
         <Section title="Buried card">
           <div className="max-w-[12rem]">
-            <CardView card={reveal.buried} compact />
+            <CardThumb roleKey={reveal.buried.roleKey} alt={`${reveal.buried.roleName}, ${reveal.buried.team}`} />
+            <div className="mt-1 text-sm font-semibold">
+              {reveal.buried.roleName}
+              <span className="ml-1 text-xs font-normal text-zinc-400">{TEAM_LABEL[reveal.buried.team]}</span>
+            </div>
           </div>
         </Section>
       )}

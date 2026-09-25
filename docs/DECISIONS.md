@@ -129,5 +129,33 @@ own leak proof was re-run (10/10 mutations caught).
 ### D11. Licensing
 
 **Choice:** the repo stays **private**; the print-and-play PDFs stay out of the served/built output and out
-of the Docker image; card art ships only as extracted WebP for personal use.
+of the Docker image; card art ships only as extracted WebP, cut from those sheets by
+`tools/assets/extract_cards.py`, for personal use on a home network.
+**Reasoning:** the app now shows the publisher's own card faces, so the "nothing leaves this network" claim
+matters more, not less: the extraction tool has no network path at all, the built client is the only place
+the images are served from, and `.dockerignore` still keeps the PDFs out of any image.
 **Source:** PLAN.md "Licensing"; publisher's print-and-play terms.
+
+### D16. The cards are cut and shown exactly as they are printed
+
+**Choice:** each card is displayed in the orientation it is printed in: artwork upright, the role title
+rotated down one side, the team bar across the bottom. The extractor rotates each cropped cell only to find
+the title block for naming; the shipped image is the printed card.
+**Reasoning:** the sheets consistently print the title perpendicular to the team bar — the leader cards on
+the same sheets are plain portrait with horizontal text, and the rulebook's own component thumbnails show
+the character cards with the title running down the side. Treating that as a scanning error and rotating the
+card would misrepresent the physical card a player is holding. `tools/assets/contact-sheet.png` is the
+evidence a human should check; the role text under the card in the app stays upright and readable
+regardless.
+**Source:** the sheets in `printable_files/` (character sheets vs leader cards vs the rulebook's "what's in
+the box" page).
+
+### D17. The Drunk's card is printed with no team at all
+
+**Choice:** the manifest records the Drunk's printed colour as `unknown`; a colour share of the Drunk's card
+shows the grey bar its engine team implies. `tests/card-art.test.ts` names the Drunk and the two Spies as the
+only roles whose printed colour deliberately differs from the engine's.
+**Reasoning:** the Drunk's printed bar reads "????" because the card becomes the buried "sober" card; there is
+no team colour on that face to sample. Recording it as an exception beats either inventing a colour or
+letting the test fail silently.
+**Source:** RULES.md §9 (Drunk); the PnP sheet's "????" team bar.

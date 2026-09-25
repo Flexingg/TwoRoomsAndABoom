@@ -1,21 +1,26 @@
 # STATUS — Two Rooms and a Boom app
 
-Last updated: 2026-09-25 11:45 EDT (plan-conformance pass, cron run 2)
+Last updated: 2026-09-25 13:20 EDT (card art)
 
 ## TL;DR
 
 The app runs on this machine as a systemd user service and has been driven end to end in a **real browser**
-(host screen + 7 phones, three rounds, exchanges, reveal). `docs/PLAN.md` is now the architecture the code
-follows, except for three named items (card art, pnpm workspaces, Fastify/Socket.IO) which are listed below
-as open rather than pretended.
+(host screen + 7 phones, three rounds, exchanges, reveal). **The cards are now the publisher's own cards**:
+98 of them, cut out of `printable_files/` locally, with the flip/share/colour-share/leader-card behaviour the
+plan asks for. `docs/PLAN.md` is the architecture the code follows, except for two named items (pnpm
+workspaces, Fastify/Socket.IO) which are listed below as open rather than pretended.
 
 - **Host screen:** http://192.168.1.146:8790/ · **Join screen:** http://192.168.1.146:8790/play
 - **Service:** `systemctl --user status tworooms` (enabled, `0.0.0.0`, logs `~/.hermes/logs/tworooms.log`)
-- **Suite:** `npm test` → **206 tests, 10 files, all green**
-- **Mutations:** `python3 tools/mutation_proof.py` → **9/9 caught**; `bash tools/wire_mutation_proof.sh` →
-  the wire check fails against a leaking build (**mutation 10, caught**). Real output in `MUTATION_PROOF.md`.
+- **Suite:** `npm test` → **216 tests, 11 files, all green** (includes `tests/card-art.test.ts`)
+- **Mutations:** `python3 tools/mutation_proof.py` → **11/11 caught** (two of them card art);
+  `bash tools/wire_mutation_proof.sh` → the wire check fails against a leaking build (**12th, caught**).
+  Real output in `MUTATION_PROOF.md`.
 - **Browser E2E:** `node tools/browser_check.mjs --attach --port 8790` → PASS (245 frames leak-scanned)
 - **Restart E2E:** `node tools/restart_check.mjs --port 8790` → PASS (6/6 seats survive a real restart)
+- **Card art E2E:** `node tools/card_art_check.mjs --attach --port 8790` → PASS (12 phones: press-and-hold
+  flip, card share shows the real face, colour share shows the bar only, the leader card with this round's
+  count, the host's chart)
 
 ## What this pass changed (plan conformance)
 
@@ -29,8 +34,8 @@ as open rather than pretended.
 | 6 | `/api/health` with the active game count | `/healthz` → `ok` | **done** (`{ok,games,players,gamesTotal,uptimeSec}`); `/healthz` kept |
 | 7 | Rate-limit 20 intents/s per socket + joins per IP | none | **done** (token bucket + per-IP join cap) |
 | 8 | 4-letter code, unambiguous alphabet, lockable, expires at game end | alphabet + 4 letters | **done** (`host:lockCode`; a finished game is no longer joinable and expires) |
-| 9 | Card art extracted from the PnP sheets | missing | **OPEN — the next piece of work** (see below) |
-| 10 | Press-and-hold card back, card/colour share images, leader card | text/colour UI | **OPEN** (depends on 9) |
+| 9 | Card art extracted from the PnP sheets | missing | **done** — 98 cards + bars + backs + leader card in `client/public/cards/`, manifest in `shared/cards/assets.json` |
+| 10 | Press-and-hold card back, card/colour share images, leader card | text/colour UI | **done** — `client/src/cardArt.tsx` |
 | 11 | `docker compose up -d --build` on :8080 + optional Caddy HTTPS | nothing | **files done and `docker compose config` verified** — the image build itself could NOT be run here (no docker-group access, no sudo); see "Not verified" |
 | 12 | README with setup, both run modes, rules, licensing note | missing | **done** (+ protocol and persistence sections) |
 | 13 | systemd user service, 0.0.0.0, logs to `~/.hermes/logs/` | not created | **done** (`deploy/tworooms.service`) |
@@ -66,7 +71,9 @@ as open rather than pretended.
 8. **Svelte vs React** — not a conflict: the plan's own row permits React. Kept (D6).
 9. **pnpm / Fastify / Socket.IO** — named by the plan, not adopted; the app already has the properties those
    choices were for. Recorded as open (D8), not silently dropped.
-10. **Card art** — the plan's whole "Card assets and physical-game UI" section is unimplemented. Open.
+10. **Card art** — *done*. The plan's "Card assets and physical-game UI" section is implemented: the
+    publisher's own card faces, cut locally by `tools/assets/extract_cards.py`; the rotation question is
+    recorded in DECISIONS.md D16, the Drunk's "????" bar in D17.
 
 ## Not verified / open
 
@@ -75,9 +82,12 @@ as open rather than pretended.
   profiles), the Dockerfile's build steps are exactly `npm ci && npm run build` which are known-good here, and
   `.dockerignore` excludes `printable_files/` — but nobody has run `docker compose up`. That is a claim
   waiting to be tested on a machine with docker access.
-- **Card art** (plan §"Card assets and physical-game UI"): no `tools/assets/extract_cards.py`, no
-  `client/public/cards/`, no `shared/cards/assets.json`, no contact sheet. The UI prints rules text and the
-  printed colour only. This is the largest remaining gap and is the next task.
+- **Card art, what is honestly true:** the extraction is scripted, `--check` proves the manifest and the
+  engine agree in both directions, and the crops were checked by eye on
+  `tools/assets/contact-sheet.png`. Two caveats worth keeping: the naming of the six image-only sheets comes
+  from OCR (each card was verified on the contact sheet, and every one of the 98 names is asserted against
+  the engine in `tests/card-art.test.ts`), and card *bodies* are cut at the 4×2 grid — the sheets print the
+  cards edge to edge, so a cell is the card plus its own bleed, not a pixel-perfect trim.
 - **pnpm workspaces, Fastify, Socket.IO** (D8).
 - The leader-card hostage table and the two Spy cards' printed colours come from OCR (two independent passes);
   they are the only rules facts with no second human-readable source.
@@ -86,11 +96,14 @@ as open rather than pretended.
 
 ```
 shared/src/    roles, deck, hostages, state machine, win, view, sealed, persist, intents (the wire)
+shared/cards/  assets.json — the card-art manifest, keyed by the engine's role keys
+client/public/cards/  98 card faces, their team bars, card back, leader card (generated, committed)
 server/src/    index (boot), app (http+ws+health+rate limit), room, store (memory+SQLite), connection
 client/src/    React host screen, player screen, useGame (socket, clock offset, wake lock)
 tests/         hidden-info (the headline), win, deck, hostages, exchange, leaders, timer, server, protocol, persistence
 tools/         mutation_proof.py, wire_mutation_proof.sh, wire_leak_check.mjs, browser_check.mjs,
-               restart_check.mjs, extract_sheets.sh
+               restart_check.mjs, extract_sheets.sh, card_art_check.mjs
+tools/assets/  extract_cards.py, contact-sheet.png
 deploy/        tworooms.service (also installed to ~/.config/systemd/user/)
 docs/          PLAN.md (authoritative), RULES.md, SPEC.md, DECISIONS.md, screenshots/
 ```

@@ -22,6 +22,13 @@ export function canPlayFiveRounds(playerCount: number): boolean {
   return playerCount > 10;
 }
 
+/** The leader card's row for this player count, as printed, e.g. "14–17 players". */
+export function playerBand(playerCount: number): string {
+  const row = CHART.find((r) => playerCount >= r.min && playerCount <= r.max);
+  if (!row) throw new Error(`player count ${playerCount} is outside ${MIN_PLAYERS}–${MAX_PLAYERS}`);
+  return row.max === MAX_PLAYERS ? `${row.min}+ players` : `${row.min}–${row.max} players`;
+}
+
 export function roundMinutes(rounds: 3 | 5): readonly number[] {
   return rounds === 5 ? ADVANCED_ROUNDS : BASIC_ROUNDS;
 }

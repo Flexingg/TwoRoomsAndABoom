@@ -1,0 +1,816 @@
+{
+  "back": "/cards/card_back.webp",
+  "bars": {
+    "blue": "/cards/bar_blue.webp",
+    "green": "/cards/bar_green.webp",
+    "grey": "/cards/bar_grey.webp",
+    "red": "/cards/bar_red.webp"
+  },
+  "cards": {
+    "agent_blue": {
+      "bar": "/cards/agent_blue_bar.webp",
+      "cell": 0,
+      "face": "/cards/agent_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Agent",
+      "sheet": "PnP01"
+    },
+    "agent_red": {
+      "bar": "/cards/agent_red_bar.webp",
+      "cell": 1,
+      "face": "/cards/agent_red.webp",
+      "printedColour": "red",
+      "printedName": "Agent",
+      "sheet": "PnP01"
+    },
+    "agoraphobe": {
+      "bar": "/cards/agoraphobe_bar.webp",
+      "cell": 2,
+      "face": "/cards/agoraphobe.webp",
+      "printedColour": "grey",
+      "printedName": "Agoraphobe",
+      "sheet": "PnP01"
+    },
+    "ahab": {
+      "bar": "/cards/ahab_bar.webp",
+      "cell": 3,
+      "face": "/cards/ahab.webp",
+      "printedColour": "grey",
+      "printedName": "Ahab",
+      "sheet": "PnP01"
+    },
+    "ambassador_blue": {
+      "bar": "/cards/ambassador_blue_bar.webp",
+      "cell": 4,
+      "face": "/cards/ambassador_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Ambassador",
+      "sheet": "PnP01"
+    },
+    "ambassador_red": {
+      "bar": "/cards/ambassador_red_bar.webp",
+      "cell": 5,
+      "face": "/cards/ambassador_red.webp",
+      "printedColour": "red",
+      "printedName": "Ambassador",
+      "sheet": "PnP01"
+    },
+    "anarchist": {
+      "bar": "/cards/anarchist_bar.webp",
+      "cell": 6,
+      "face": "/cards/anarchist.webp",
+      "printedColour": "grey",
+      "printedName": "Anarchist",
+      "sheet": "PnP01"
+    },
+    "angel_blue": {
+      "bar": "/cards/angel_blue_bar.webp",
+      "cell": 7,
+      "face": "/cards/angel_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Angel",
+      "sheet": "PnP01"
+    },
+    "angel_red": {
+      "bar": "/cards/angel_red_bar.webp",
+      "cell": 0,
+      "face": "/cards/angel_red.webp",
+      "printedColour": "red",
+      "printedName": "Angel",
+      "sheet": "PnP02"
+    },
+    "blind_blue": {
+      "bar": "/cards/blind_blue_bar.webp",
+      "cell": 1,
+      "face": "/cards/blind_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Blind",
+      "sheet": "PnP02"
+    },
+    "blind_red": {
+      "bar": "/cards/blind_red_bar.webp",
+      "cell": 2,
+      "face": "/cards/blind_red.webp",
+      "printedColour": "red",
+      "printedName": "Blind",
+      "sheet": "PnP02"
+    },
+    "blue_team": {
+      "bar": "/cards/blue_team_bar.webp",
+      "cell": 0,
+      "face": "/cards/blue_team.webp",
+      "printedColour": "blue",
+      "printedName": "Blue Team",
+      "sheet": "PnP03"
+    },
+    "bomb_bot": {
+      "bar": "/cards/bomb_bot_bar.webp",
+      "cell": 2,
+      "face": "/cards/bomb_bot.webp",
+      "printedColour": "grey",
+      "printedName": "Bomb-Bot",
+      "sheet": "PnP03"
+    },
+    "bomber": {
+      "bar": "/cards/bomber_bar.webp",
+      "cell": 3,
+      "face": "/cards/bomber.webp",
+      "printedColour": "red",
+      "printedName": "Bomber",
+      "sheet": "PnP03"
+    },
+    "bouncer_blue": {
+      "bar": "/cards/bouncer_blue_bar.webp",
+      "cell": 4,
+      "face": "/cards/bouncer_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Bouncer",
+      "sheet": "PnP03"
+    },
+    "bouncer_red": {
+      "bar": "/cards/bouncer_red_bar.webp",
+      "cell": 5,
+      "face": "/cards/bouncer_red.webp",
+      "printedColour": "red",
+      "printedName": "Bouncer",
+      "sheet": "PnP03"
+    },
+    "butler": {
+      "bar": "/cards/butler_bar.webp",
+      "cell": 6,
+      "face": "/cards/butler.webp",
+      "printedColour": "grey",
+      "printedName": "Butler",
+      "sheet": "PnP03"
+    },
+    "clone": {
+      "bar": "/cards/clone_bar.webp",
+      "cell": 7,
+      "face": "/cards/clone.webp",
+      "printedColour": "grey",
+      "printedName": "Clone",
+      "sheet": "PnP03"
+    },
+    "clown_blue": {
+      "bar": "/cards/clown_blue_bar.webp",
+      "cell": 0,
+      "face": "/cards/clown_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Clown",
+      "sheet": "PnP04"
+    },
+    "clown_red": {
+      "bar": "/cards/clown_red_bar.webp",
+      "cell": 1,
+      "face": "/cards/clown_red.webp",
+      "printedColour": "red",
+      "printedName": "Clown",
+      "sheet": "PnP04"
+    },
+    "conman_blue": {
+      "bar": "/cards/conman_blue_bar.webp",
+      "cell": 2,
+      "face": "/cards/conman_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Conman",
+      "sheet": "PnP04"
+    },
+    "conman_red": {
+      "bar": "/cards/conman_red_bar.webp",
+      "cell": 3,
+      "face": "/cards/conman_red.webp",
+      "printedColour": "red",
+      "printedName": "Conman",
+      "sheet": "PnP04"
+    },
+    "coy_boy_blue": {
+      "bar": "/cards/coy_boy_blue_bar.webp",
+      "cell": 4,
+      "face": "/cards/coy_boy_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Coy Boy",
+      "sheet": "PnP04"
+    },
+    "coy_boy_red": {
+      "bar": "/cards/coy_boy_red_bar.webp",
+      "cell": 5,
+      "face": "/cards/coy_boy_red.webp",
+      "printedColour": "red",
+      "printedName": "Coy Boy",
+      "sheet": "PnP04"
+    },
+    "criminal_blue": {
+      "bar": "/cards/criminal_blue_bar.webp",
+      "cell": 6,
+      "face": "/cards/criminal_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Criminal",
+      "sheet": "PnP04"
+    },
+    "criminal_red": {
+      "bar": "/cards/criminal_red_bar.webp",
+      "cell": 7,
+      "face": "/cards/criminal_red.webp",
+      "printedColour": "red",
+      "printedName": "Criminal",
+      "sheet": "PnP04"
+    },
+    "cupid": {
+      "bar": "/cards/cupid_bar.webp",
+      "cell": 0,
+      "face": "/cards/cupid.webp",
+      "printedColour": "red",
+      "printedName": "Cupid",
+      "sheet": "PnP05"
+    },
+    "daughter": {
+      "bar": "/cards/daughter_bar.webp",
+      "cell": 4,
+      "face": "/cards/daughter.webp",
+      "printedColour": "blue",
+      "printedName": "President's Daughter",
+      "sheet": "PnP10"
+    },
+    "dealer_blue": {
+      "bar": "/cards/dealer_blue_bar.webp",
+      "cell": 1,
+      "face": "/cards/dealer_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Dealer",
+      "sheet": "PnP05"
+    },
+    "dealer_red": {
+      "bar": "/cards/dealer_red_bar.webp",
+      "cell": 2,
+      "face": "/cards/dealer_red.webp",
+      "printedColour": "red",
+      "printedName": "Dealer",
+      "sheet": "PnP05"
+    },
+    "decoy": {
+      "bar": "/cards/decoy_bar.webp",
+      "cell": 3,
+      "face": "/cards/decoy.webp",
+      "printedColour": "grey",
+      "printedName": "Decoy",
+      "sheet": "PnP05"
+    },
+    "demon_blue": {
+      "bar": "/cards/demon_blue_bar.webp",
+      "cell": 4,
+      "face": "/cards/demon_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Demon",
+      "sheet": "PnP05"
+    },
+    "demon_red": {
+      "bar": "/cards/demon_red_bar.webp",
+      "cell": 5,
+      "face": "/cards/demon_red.webp",
+      "printedColour": "red",
+      "printedName": "Demon",
+      "sheet": "PnP05"
+    },
+    "doctor": {
+      "bar": "/cards/doctor_bar.webp",
+      "cell": 6,
+      "face": "/cards/doctor.webp",
+      "printedColour": "blue",
+      "printedName": "Doctor",
+      "sheet": "PnP05"
+    },
+    "dr_boom": {
+      "bar": "/cards/dr_boom_bar.webp",
+      "cell": 7,
+      "face": "/cards/dr_boom.webp",
+      "printedColour": "red",
+      "printedName": "Dr. Boom",
+      "sheet": "PnP05"
+    },
+    "drunk": {
+      "bar": "/cards/drunk_bar.webp",
+      "cell": 0,
+      "face": "/cards/drunk.webp",
+      "printedColour": "unknown",
+      "printedName": "Drunk",
+      "sheet": "PnP06"
+    },
+    "enforcer_blue": {
+      "bar": "/cards/enforcer_blue_bar.webp",
+      "cell": 1,
+      "face": "/cards/enforcer_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Enforcer",
+      "sheet": "PnP06"
+    },
+    "enforcer_red": {
+      "bar": "/cards/enforcer_red_bar.webp",
+      "cell": 2,
+      "face": "/cards/enforcer_red.webp",
+      "printedColour": "red",
+      "printedName": "Enforcer",
+      "sheet": "PnP06"
+    },
+    "engineer": {
+      "bar": "/cards/engineer_bar.webp",
+      "cell": 3,
+      "face": "/cards/engineer.webp",
+      "printedColour": "red",
+      "printedName": "Engineer",
+      "sheet": "PnP06"
+    },
+    "eris": {
+      "bar": "/cards/eris_bar.webp",
+      "cell": 4,
+      "face": "/cards/eris.webp",
+      "printedColour": "blue",
+      "printedName": "Eris",
+      "sheet": "PnP06"
+    },
+    "gambler": {
+      "bar": "/cards/gambler_bar.webp",
+      "cell": 5,
+      "face": "/cards/gambler.webp",
+      "printedColour": "grey",
+      "printedName": "Gambler",
+      "sheet": "PnP06"
+    },
+    "hot_potato": {
+      "bar": "/cards/hot_potato_bar.webp",
+      "cell": 6,
+      "face": "/cards/hot_potato.webp",
+      "printedColour": "grey",
+      "printedName": "Hot Potato",
+      "sheet": "PnP06"
+    },
+    "immunologist": {
+      "bar": "/cards/immunologist_bar.webp",
+      "cell": 0,
+      "face": "/cards/immunologist.webp",
+      "printedColour": "red",
+      "printedName": "Immunologist",
+      "sheet": "PnP07"
+    },
+    "intern": {
+      "bar": "/cards/intern_bar.webp",
+      "cell": 1,
+      "face": "/cards/intern.webp",
+      "printedColour": "grey",
+      "printedName": "Intern",
+      "sheet": "PnP07"
+    },
+    "invincible": {
+      "bar": "/cards/invincible_bar.webp",
+      "cell": 7,
+      "face": "/cards/invincible.webp",
+      "printedColour": "blue",
+      "printedName": "Invincible",
+      "sheet": "PnP06"
+    },
+    "juliet": {
+      "bar": "/cards/juliet_bar.webp",
+      "cell": 2,
+      "face": "/cards/juliet.webp",
+      "printedColour": "grey",
+      "printedName": "Juliet",
+      "sheet": "PnP07"
+    },
+    "leprechaun": {
+      "bar": "/cards/leprechaun_bar.webp",
+      "cell": 3,
+      "face": "/cards/leprechaun.webp",
+      "printedColour": "green",
+      "printedName": "Leprechaun",
+      "sheet": "PnP07"
+    },
+    "maid": {
+      "bar": "/cards/maid_bar.webp",
+      "cell": 4,
+      "face": "/cards/maid.webp",
+      "printedColour": "grey",
+      "printedName": "Maid",
+      "sheet": "PnP07"
+    },
+    "martyr": {
+      "bar": "/cards/martyr_bar.webp",
+      "cell": 5,
+      "face": "/cards/martyr.webp",
+      "printedColour": "red",
+      "printedName": "Martyr",
+      "sheet": "PnP07"
+    },
+    "mastermind": {
+      "bar": "/cards/mastermind_bar.webp",
+      "cell": 6,
+      "face": "/cards/mastermind.webp",
+      "printedColour": "grey",
+      "printedName": "Mastermind",
+      "sheet": "PnP07"
+    },
+    "mayor_blue": {
+      "bar": "/cards/mayor_blue_bar.webp",
+      "cell": 7,
+      "face": "/cards/mayor_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Mayor",
+      "sheet": "PnP07"
+    },
+    "mayor_red": {
+      "bar": "/cards/mayor_red_bar.webp",
+      "cell": 0,
+      "face": "/cards/mayor_red.webp",
+      "printedColour": "red",
+      "printedName": "Mayor",
+      "sheet": "PnP08"
+    },
+    "medic_blue": {
+      "bar": "/cards/medic_blue_bar.webp",
+      "cell": 1,
+      "face": "/cards/medic_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Medic",
+      "sheet": "PnP08"
+    },
+    "medic_red": {
+      "bar": "/cards/medic_red_bar.webp",
+      "cell": 2,
+      "face": "/cards/medic_red.webp",
+      "printedColour": "red",
+      "printedName": "Medic",
+      "sheet": "PnP08"
+    },
+    "mi6": {
+      "bar": "/cards/mi6_bar.webp",
+      "cell": 3,
+      "face": "/cards/mi6.webp",
+      "printedColour": "grey",
+      "printedName": "MI6",
+      "sheet": "PnP08"
+    },
+    "mime_blue": {
+      "bar": "/cards/mime_blue_bar.webp",
+      "cell": 4,
+      "face": "/cards/mime_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Mime",
+      "sheet": "PnP08"
+    },
+    "mime_red": {
+      "bar": "/cards/mime_red_bar.webp",
+      "cell": 5,
+      "face": "/cards/mime_red.webp",
+      "printedColour": "red",
+      "printedName": "Mime",
+      "sheet": "PnP08"
+    },
+    "minion": {
+      "bar": "/cards/minion_bar.webp",
+      "cell": 6,
+      "face": "/cards/minion.webp",
+      "printedColour": "grey",
+      "printedName": "Minion",
+      "sheet": "PnP08"
+    },
+    "mistress": {
+      "bar": "/cards/mistress_bar.webp",
+      "cell": 7,
+      "face": "/cards/mistress.webp",
+      "printedColour": "grey",
+      "printedName": "Mistress",
+      "sheet": "PnP08"
+    },
+    "moby": {
+      "bar": "/cards/moby_bar.webp",
+      "cell": 0,
+      "face": "/cards/moby.webp",
+      "printedColour": "grey",
+      "printedName": "Moby",
+      "sheet": "PnP09"
+    },
+    "mummy_blue": {
+      "bar": "/cards/mummy_blue_bar.webp",
+      "cell": 1,
+      "face": "/cards/mummy_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Mummy",
+      "sheet": "PnP09"
+    },
+    "mummy_red": {
+      "bar": "/cards/mummy_red_bar.webp",
+      "cell": 2,
+      "face": "/cards/mummy_red.webp",
+      "printedColour": "red",
+      "printedName": "Mummy",
+      "sheet": "PnP09"
+    },
+    "negotiator_blue": {
+      "bar": "/cards/negotiator_blue_bar.webp",
+      "cell": 3,
+      "face": "/cards/negotiator_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Negotiator",
+      "sheet": "PnP09"
+    },
+    "negotiator_red": {
+      "bar": "/cards/negotiator_red_bar.webp",
+      "cell": 4,
+      "face": "/cards/negotiator_red.webp",
+      "printedColour": "red",
+      "printedName": "Negotiator",
+      "sheet": "PnP09"
+    },
+    "nuclear_tyrant": {
+      "bar": "/cards/nuclear_tyrant_bar.webp",
+      "cell": 5,
+      "face": "/cards/nuclear_tyrant.webp",
+      "printedColour": "grey",
+      "printedName": "Nuclear Tyrant",
+      "sheet": "PnP09"
+    },
+    "nurse": {
+      "bar": "/cards/nurse_bar.webp",
+      "cell": 6,
+      "face": "/cards/nurse.webp",
+      "printedColour": "blue",
+      "printedName": "Nurse",
+      "sheet": "PnP09"
+    },
+    "paparazzo_blue": {
+      "bar": "/cards/paparazzo_blue_bar.webp",
+      "cell": 7,
+      "face": "/cards/paparazzo_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Paparazzo",
+      "sheet": "PnP09"
+    },
+    "paparazzo_red": {
+      "bar": "/cards/paparazzo_red_bar.webp",
+      "cell": 0,
+      "face": "/cards/paparazzo_red.webp",
+      "printedColour": "red",
+      "printedName": "Paparazzo",
+      "sheet": "PnP10"
+    },
+    "paranoid_blue": {
+      "bar": "/cards/paranoid_blue_bar.webp",
+      "cell": 1,
+      "face": "/cards/paranoid_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Paranoid",
+      "sheet": "PnP10"
+    },
+    "paranoid_red": {
+      "bar": "/cards/paranoid_red_bar.webp",
+      "cell": 2,
+      "face": "/cards/paranoid_red.webp",
+      "printedColour": "red",
+      "printedName": "Paranoid",
+      "sheet": "PnP10"
+    },
+    "president": {
+      "bar": "/cards/president_bar.webp",
+      "cell": 3,
+      "face": "/cards/president.webp",
+      "printedColour": "blue",
+      "printedName": "President",
+      "sheet": "PnP10"
+    },
+    "private_eye": {
+      "bar": "/cards/private_eye_bar.webp",
+      "cell": 5,
+      "face": "/cards/private_eye.webp",
+      "printedColour": "grey",
+      "printedName": "Private Eye",
+      "sheet": "PnP10"
+    },
+    "psychologist_blue": {
+      "bar": "/cards/psychologist_blue_bar.webp",
+      "cell": 6,
+      "face": "/cards/psychologist_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Psychologist",
+      "sheet": "PnP10"
+    },
+    "psychologist_red": {
+      "bar": "/cards/psychologist_red_bar.webp",
+      "cell": 7,
+      "face": "/cards/psychologist_red.webp",
+      "printedColour": "red",
+      "printedName": "Psychologist",
+      "sheet": "PnP10"
+    },
+    "queen": {
+      "bar": "/cards/queen_bar.webp",
+      "cell": 0,
+      "face": "/cards/queen.webp",
+      "printedColour": "grey",
+      "printedName": "Queen",
+      "sheet": "PnP11"
+    },
+    "red_team": {
+      "bar": "/cards/red_team_bar.webp",
+      "cell": 1,
+      "face": "/cards/red_team.webp",
+      "printedColour": "red",
+      "printedName": "Red Team",
+      "sheet": "PnP11"
+    },
+    "rival": {
+      "bar": "/cards/rival_bar.webp",
+      "cell": 0,
+      "face": "/cards/rival.webp",
+      "printedColour": "grey",
+      "printedName": "Rival",
+      "sheet": "PnP12"
+    },
+    "robot": {
+      "bar": "/cards/robot_bar.webp",
+      "cell": 1,
+      "face": "/cards/robot.webp",
+      "printedColour": "grey",
+      "printedName": "Robot",
+      "sheet": "PnP12"
+    },
+    "romeo": {
+      "bar": "/cards/romeo_bar.webp",
+      "cell": 2,
+      "face": "/cards/romeo.webp",
+      "printedColour": "grey",
+      "printedName": "Romeo",
+      "sheet": "PnP12"
+    },
+    "security_blue": {
+      "bar": "/cards/security_blue_bar.webp",
+      "cell": 3,
+      "face": "/cards/security_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Security",
+      "sheet": "PnP12"
+    },
+    "security_red": {
+      "bar": "/cards/security_red_bar.webp",
+      "cell": 4,
+      "face": "/cards/security_red.webp",
+      "printedColour": "red",
+      "printedName": "Security",
+      "sheet": "PnP12"
+    },
+    "shy_guy_blue": {
+      "bar": "/cards/shy_guy_blue_bar.webp",
+      "cell": 5,
+      "face": "/cards/shy_guy_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Shy Guy",
+      "sheet": "PnP12"
+    },
+    "shy_guy_red": {
+      "bar": "/cards/shy_guy_red_bar.webp",
+      "cell": 6,
+      "face": "/cards/shy_guy_red.webp",
+      "printedColour": "red",
+      "printedName": "Shy Guy",
+      "sheet": "PnP12"
+    },
+    "sniper": {
+      "bar": "/cards/sniper_bar.webp",
+      "cell": 7,
+      "face": "/cards/sniper.webp",
+      "printedColour": "grey",
+      "printedName": "Sniper",
+      "sheet": "PnP12"
+    },
+    "spy_blue": {
+      "bar": "/cards/spy_blue_bar.webp",
+      "cell": 0,
+      "face": "/cards/spy_blue.webp",
+      "printedColour": "red",
+      "printedName": "Spy",
+      "sheet": "PnP13"
+    },
+    "spy_red": {
+      "bar": "/cards/spy_red_bar.webp",
+      "cell": 1,
+      "face": "/cards/spy_red.webp",
+      "printedColour": "blue",
+      "printedName": "Spy",
+      "sheet": "PnP13"
+    },
+    "survivor": {
+      "bar": "/cards/survivor_bar.webp",
+      "cell": 2,
+      "face": "/cards/survivor.webp",
+      "printedColour": "grey",
+      "printedName": "Survivor",
+      "sheet": "PnP13"
+    },
+    "target": {
+      "bar": "/cards/target_bar.webp",
+      "cell": 3,
+      "face": "/cards/target.webp",
+      "printedColour": "grey",
+      "printedName": "Target",
+      "sheet": "PnP13"
+    },
+    "thug_blue": {
+      "bar": "/cards/thug_blue_bar.webp",
+      "cell": 4,
+      "face": "/cards/thug_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Thug",
+      "sheet": "PnP13"
+    },
+    "thug_red": {
+      "bar": "/cards/thug_red_bar.webp",
+      "cell": 5,
+      "face": "/cards/thug_red.webp",
+      "printedColour": "red",
+      "printedName": "Thug",
+      "sheet": "PnP13"
+    },
+    "tinkerer": {
+      "bar": "/cards/tinkerer_bar.webp",
+      "cell": 6,
+      "face": "/cards/tinkerer.webp",
+      "printedColour": "red",
+      "printedName": "Tinkerer",
+      "sheet": "PnP13"
+    },
+    "traveler": {
+      "bar": "/cards/traveler_bar.webp",
+      "cell": 7,
+      "face": "/cards/traveler.webp",
+      "printedColour": "grey",
+      "printedName": "Traveler",
+      "sheet": "PnP13"
+    },
+    "tuesday_knight": {
+      "bar": "/cards/tuesday_knight_bar.webp",
+      "cell": 0,
+      "face": "/cards/tuesday_knight.webp",
+      "printedColour": "blue",
+      "printedName": "Tuesday Knight",
+      "sheet": "PnP14"
+    },
+    "usurper_blue": {
+      "bar": "/cards/usurper_blue_bar.webp",
+      "cell": 1,
+      "face": "/cards/usurper_blue.webp",
+      "printedColour": "blue",
+      "printedName": "Usurper",
+      "sheet": "PnP14"
+    },
+    "usurper_red": {
+      "bar": "/cards/usurper_red_bar.webp",
+      "cell": 2,
+      "face": "/cards/usurper_red.webp",
+      "printedColour": "red",
+      "printedName": "Usurper",
+      "sheet": "PnP14"
+    },
+    "victim": {
+      "bar": "/cards/victim_bar.webp",
+      "cell": 3,
+      "face": "/cards/victim.webp",
+      "printedColour": "grey",
+      "printedName": "Victim",
+      "sheet": "PnP14"
+    },
+    "wife": {
+      "bar": "/cards/wife_bar.webp",
+      "cell": 4,
+      "face": "/cards/wife.webp",
+      "printedColour": "grey",
+      "printedName": "Wife",
+      "sheet": "PnP14"
+    },
+    "zombie": {
+      "bar": "/cards/zombie_bar.webp",
+      "cell": 5,
+      "face": "/cards/zombie.webp",
+      "printedColour": "green",
+      "printedName": "Zombie",
+      "sheet": "PnP14"
+    }
+  },
+  "duplicatesIgnored": [
+    "blue_team also printed on PnP03 cell 1",
+    "blue_team also printed on PnP02 cell 3",
+    "blue_team also printed on PnP02 cell 4",
+    "blue_team also printed on PnP02 cell 5",
+    "blue_team also printed on PnP02 cell 6",
+    "blue_team also printed on PnP02 cell 7",
+    "red_team also printed on PnP11 cell 2",
+    "red_team also printed on PnP11 cell 3",
+    "red_team also printed on PnP11 cell 4",
+    "red_team also printed on PnP11 cell 5",
+    "red_team also printed on PnP11 cell 6",
+    "red_team also printed on PnP11 cell 7"
+  ],
+  "engineRoles": 98,
+  "leader": {
+    "back": "/cards/leader_back.webp",
+    "face": "/cards/leader.webp"
+  },
+  "note": "Card art cut from the publisher's print-and-play sheets in printable_files/ by tools/assets/extract_cards.py. Nothing here came off the internet, and nothing is served from outside this app. The repo stays private because those sheets are Tuesday Knight Games' print-and-play files, not ours.",
+  "source": "printable_files/*.pdf"
+}

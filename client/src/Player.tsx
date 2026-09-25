@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Action, PlayerView, RosterEntry } from "../../shared/src/protocol";
-import { CONDITION_TEXT, ROLES, roleLabel } from "../../shared/src/roles";
+import { CONDITION_TEXT, ROLES, roleLabel, type CardColor } from "../../shared/src/roles";
+import { CardThumb, HeldCard, LeaderCardPanel, ShareReveal, TeamBar } from "./cardArt";
 import { Reveal } from "./Host";
 import { loadSession, useGame, useWakeLock } from "./useGame";
-import { Btn, CardView, COLOR_BG, ConnBadge, Countdown, ErrorBanner, nameOf, PHASE_LABEL, Section, TEAM_LABEL } from "./ui";
+import { Btn, ConnBadge, Countdown, ErrorBanner, nameOf, PHASE_LABEL, Section, TEAM_LABEL } from "./ui";
 
 export function Player() {
   const { view, status, offset, send, sendRaw, act, forget } = useGame("player");
@@ -64,12 +65,37 @@ const TARGET_POWERS: Record<string, { label: string; need: number }> = {
 
 function Game({ view, offset, act, sendRaw, status, forget }: { view: PlayerView; offset: number; act: (a: Action) => void; sendRaw: (w: Record<string, unknown>) => void; status: ReturnType<typeof useGame>["status"]; forget: () => void }) {
   const you = view.you;
-  const [showCard, setShowCard] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [picking, setPicking] = useState<Picking | null>(null);
   const [mayor, setMayor] = useState(false);
+  const [share, setShare] = useState<{ who: string; level: "card" | "color"; roleKey?: string | null; roleName?: string; team?: string; colour: CardColor; via: string } | null>(null);
+  // A card you are shown takes the screen for a few seconds — the art of the
+  // card that is physically in the other player's hand. Track which shares this
+  // phone has already shown so a reconnect doesn't replay the whole game.
+  const shownRef = useRef<Set<string> | null>(null);
   const inGame = !["LOBBY", "REVEAL", "RESULT"].includes(view.phase);
   const playing = ["ROUND_ACTIVE", "ROUND_END_SELECT", "ROUND_END_PARLEY"].includes(view.phase);
+  useEffect(() => {
+    const ids = view.known.map((k) => `${k.subjectId}:${k.level}`);
+    if (shownRef.current === null) {
+      shownRef.current = new Set(ids);
+      return;
+    }
+    const fresh = view.known.filter((k) => !shownRef.current!.has(`${k.subjectId}:${k.level}`));
+    ids.forEach((id) => shownRef.current!.add(id));
+    const last = fresh[fresh.length - 1];
+    if (last) {
+      setShare({
+        who: nameOf(view, last.subjectId),
+        level: last.level,
+        roleKey: last.card?.roleKey,
+        roleName: last.card?.roleName,
+        team: last.card?.team,
+        colour: last.cardColor,
+        via: last.via,
+      });
+    }
+  }, [view.known]);
   // An Ambassador roams, so can deal with anyone; everyone else deals with their room (and Ambassadors).
   const meRoaming = view.roster.find((r) => r.id === you.id)?.roaming ?? false;
   const roomMates = view.roster.filter((r) => r.id !== you.id && (meRoaming ? r.room !== null : r.roaming || r.room === you.room));
@@ -119,6 +145,18 @@ function Game({ view, offset, act, sendRaw, status, forget }: { view: PlayerView
   return (
     <main className="mx-auto max-w-md p-4 space-y-4 pb-24">
       <ConnBadge status={status} />
+      {share && (
+        <ShareReveal
+          who={share.who}
+          level={share.level}
+          roleKey={share.roleKey}
+          roleName={share.roleName}
+          team={share.team}
+          colour={share.colour}
+          via={share.via}
+          onDone={() => setShare(null)}
+        />
+      )}
       <header className="flex items-center gap-3">
         <div className="min-w-0">
           <div className="text-xs uppercase tracking-widest text-zinc-400">{you.name}</div>
@@ -135,11 +173,16 @@ function Game({ view, offset, act, sendRaw, status, forget }: { view: PlayerView
       {/* ------------------------------------------------ your card */}
       {inGame && (
         <section>
-          {showCard ? (
-            <button type="button" className="w-full text-left" onClick={() => setShowCard(false)}>
-              <CardView card={{ roleKey: you.roleKey, roleName: you.roleName, team: you.team, cardColor: you.cardColor, powerText: you.powerText, winText: you.winText }} />
-              {you.conditions.length > 0 && (
-                <ul className="mt-2 space-y-1 text-sm">
+          <HeldCard
+            roleKey={you.roleKey}
+            roleName={you.roleName}
+            team={you.team}
+            cardColor={you.cardColor}
+            powerText={you.powerText}
+            winText={you.winText}
+            conditions={
+              you.conditions.length > 0 ? (
+                <ul className="mt-1 space-y-1 text-sm">
                   {you.conditions.map((c) => (
                     <li key={c}>
                       <b>“{c}”</b> — {CONDITION_TEXT[c]}
@@ -148,16 +191,20 @@ function Game({ view, offset, act, sendRaw, status, forget }: { view: PlayerView
                     </li>
                   ))}
                 </ul>
-              )}
-              <div className="mt-1 text-center text-xs text-zinc-500">Tap to hide</div>
-            </button>
-          ) : (
-            <button type="button" onClick={() => setShowCard(true)} className="w-full rounded-2xl border-2 border-dashed border-zinc-700 py-10 text-center text-zinc-300">
-              Tap to look at your card
-              <div className="text-xs text-zinc-500 mt-1">Shield your screen</div>
-            </button>
-          )}
+              ) : null
+            }
+          />
         </section>
+      )}
+
+      {/* ------------------------------------------------ the leader card */}
+      {you.isLeader && r && (
+        <LeaderCardPanel
+          roundIndex={Math.max(0, view.roundIndex)}
+          rounds={view.roundMinutes.length}
+          playerCount={view.playerCount}
+          hostageCount={r.hostageCount}
+        />
       )}
 
       {/* ------------------------------------------------ announcements */}
@@ -334,15 +381,37 @@ function Game({ view, offset, act, sendRaw, status, forget }: { view: PlayerView
           <ul className="space-y-2">
             {view.known.map((k) => (
               <li key={k.subjectId} className="flex items-center gap-3">
-                <span className="w-24 shrink-0 truncate font-semibold">{nameOf(view, k.subjectId)}</span>
+                <button
+                  type="button"
+                  className="w-12 shrink-0"
+                  title="Show me again"
+                  onClick={() =>
+                    setShare({
+                      who: nameOf(view, k.subjectId),
+                      level: k.level,
+                      roleKey: k.card?.roleKey,
+                      roleName: k.card?.roleName,
+                      team: k.card?.team,
+                      colour: k.cardColor,
+                      via: k.via,
+                    })
+                  }
+                >
+                  {k.card ? (
+                    <CardThumb roleKey={k.card.roleKey} alt={`${k.card.roleName} card`} />
+                  ) : (
+                    <TeamBar colour={k.cardColor} label={`${k.cardColor} card`} />
+                  )}
+                </button>
+                <span className="w-20 shrink-0 truncate font-semibold">{nameOf(view, k.subjectId)}</span>
                 {k.card ? (
-                  <span className={`rounded-lg ${COLOR_BG[k.cardColor]} px-2 py-1 text-sm font-bold text-white`}>
+                  <span className="text-sm font-bold">
                     {k.card.roleName} · {TEAM_LABEL[k.card.team]}
                   </span>
                 ) : (
-                  <span className={`rounded-lg ${COLOR_BG[k.cardColor]} px-2 py-1 text-sm font-bold text-white`}>{k.cardColor} card</span>
+                  <span className="text-sm font-bold">{k.cardColor} card</span>
                 )}
-                <span className="ml-auto text-xs text-zinc-500">{k.via.replace("_", " ")}</span>
+                <span className="ml-auto text-xs text-zinc-500">{k.via.replace(/_/g, " ")}</span>
               </li>
             ))}
           </ul>

@@ -119,6 +119,24 @@ MUTATIONS = [
         "RULES.md §9: Agoraphobe wins only if it never left its initial room — the per-card objectives are "
         "as load-bearing as the base rule.",
     ),
+    (
+        "a role loses its card art",
+        "shared/cards/assets.json",
+        '"agoraphobe": {',
+        '"agoraphobe_mutated_away": {',
+        "tests/card-art.test.ts",
+        "the manifest is the only source of card art, and it is keyed by the engine's role keys: if a role "
+        "the engine can deal has no art, the app shows a card it cannot picture.",
+    ),
+    (
+        "an extracted card carries the wrong printed colour",
+        "shared/cards/assets.json",
+        '"printedColour": "blue",\n      "printedName": "Spy",\n      "sheet": "PnP13"',
+        '"printedColour": "red",\n      "printedName": "Spy",\n      "sheet": "PnP13"',
+        "tests/card-art.test.ts",
+        "a Spy card is printed in the opposite team's colour (RULES.md §9) — the card face is what other "
+        "players see, so a flipped colour is a rules bug, not a cosmetic one.",
+    ),
 ]
 
 

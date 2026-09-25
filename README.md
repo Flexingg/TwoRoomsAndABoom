@@ -133,14 +133,52 @@ contradictions and how they were resolved recorded in **docs/DECISIONS.md**.
 shared/src/      rules engine: roles.ts, deck.ts, hostages.ts, state.ts, win.ts, view.ts, protocol.ts, sealed.ts
 server/src/      http + websocket transport, rooms, connections
 client/src/      React host screen (Host.tsx) and player screen (Player.tsx)
-tests/           vitest: deck, hostages, win, exchange, leaders, timer, server, and the hidden-information property
+tests/           vitest: deck, hostages, win, exchange, leaders, timer, server, card art, and the
+                 hidden-information property
 tools/           extract_sheets.sh (re-extract the sheets), browser_check.mjs (real-browser end-to-end),
-                 mutation_proof.py (mutation-proves the suite), list_roles.ts
+                 card_art_check.mjs (the cards, in a real browser), mutation_proof.py (mutation-proves the
+                 suite), list_roles.ts
+tools/assets/    extract_cards.py (cut the cards out of the sheets) + contact-sheet.png (look at it)
+client/public/cards/  the extracted card art — 98 faces, their team bars, the card back, the leader card
+shared/cards/assets.json  the manifest: role key -> face, bar, printed name and printed colour
 deploy/          tworooms.service (systemd user unit)
 docs/            RULES.md, DECISIONS.md, SPEC.md, PLAN.md, AGENT_BRIEF.md
-printable_files/ the publisher's sheets — reference only, do not redistribute
+printable_files/ the publisher's sheets — reference only, do not redistribute; never in the built output
 MUTATION_PROOF.md the recorded failing runs that prove the tests can fail
 ```
+
+## Card art
+
+The cards on screen are the publisher's own cards. `tools/assets/extract_cards.py` cuts them out of the
+print-and-play sheets in `printable_files/` — nothing is downloaded, and nothing outside this app is ever
+asked for a picture of a card:
+
+```bash
+python3 tools/assets/extract_cards.py           # 8 min: crops 98 cards + their team bars into client/public/cards/
+python3 tools/assets/extract_cards.py --check   # fails if a role the engine deals has no art, or art has no role
+```
+
+- Each sheet is a 4×2 grid on letter landscape. The grid is found from the page's own ink (two row bands
+  from the white gutter between them, four columns quartered from the ink's x-extent), so a sheet with six
+  cards on it does not get its cards sliced in half.
+- **The cards are printed with the role title rotated down the side** — that is the publisher's own design,
+  not a mistake in this repo, so each card is cut and shown exactly as it is printed: art upright, title
+  down the side, team bar across the bottom. The contact sheet at `tools/assets/contact-sheet.png` is the
+  proof; look at it after a run.
+- Cards are named from the words the PDF puts inside the card's title block (OCR on the six image-only
+  sheets), matched against the role catalogue parsed out of `shared/src/roles.ts`. The two-printing pairs
+  (Agent, Ambassador, Spy) are resolved by *the printed colour of the bar*, because a Spy card is printed in
+  the opposite team's colour.
+- The output is `client/public/cards/<role_key>.webp` plus `<role_key>_bar.webp`, the card back, the leader
+  card front/back, one bar per printed colour for colour shares, and the manifest
+  `shared/cards/assets.json`. `tests/card-art.test.ts` fails if the manifest and the engine disagree, if a
+  file is missing, or if a card's printed colour contradicts what the rules say is printed on it (the two
+  Spies, and the Drunk's "????" bar, are the named exceptions).
+- `client/src/cardArt.tsx` is the only way the UI gets a card image. Your card lies face down and turns over
+  while you press and hold it; a card share takes the other player's screen with the real card face; a colour
+  share shows only the printed team bar; the leader's phone shows the real leader card with this round's
+  hostage count. The app's team colours in `tailwind.config.js` are the printed bar colours, sampled from
+  those crops.
 
 ## Reproducing the sheets extraction
 
@@ -157,16 +195,19 @@ to settle the 11–13-player band where the card and the rulebook disagree.
 ## Verification
 
 ```bash
-npm test                                  # 206 tests, 10 files
-python3 tools/mutation_proof.py           # break a rule, watch the test catch it  (9/9 caught)
+npm test                                  # 216 tests, 11 files
+python3 tools/mutation_proof.py           # break a rule, watch the test catch it  (11/11 caught)
 bash tools/wire_mutation_proof.sh         # ...and the wire check fails against a leaking build
 node tools/browser_check.mjs              # a real Chromium: host + 7 phones play a whole game
 node tools/browser_check.mjs --attach --port 8790   # the same, against the running service
+node tools/card_art_check.mjs --port 8799           # 12 phones: hold-to-flip, card share, colour share,
+                                                    # the leader card — against the real built client
+node tools/card_art_check.mjs --attach --port 8790  # the same, against the running service
 node tools/restart_check.mjs --port 8790            # kill the service mid-round; every seat comes back
 node tools/wire_leak_check.mjs --port 8790          # raw WebSocket: a reveal leaks only to its two parties
 ```
 
-`MUTATION_PROOF.md` holds the real failing output for all ten mutations, including the wire-level one.
+`MUTATION_PROOF.md` holds the real failing output for every mutation, including the wire-level one.
 
 ## The wire protocol
 
@@ -205,9 +246,6 @@ server-side-only like memory is, is git-ignored, is never served, and is exclude
 
 ## Not done yet (honest list)
 
-- **Card art.** The UI prints role text and the printed colour; it does not yet use the print-and-play
-  artwork. `tools/assets/extract_cards.py` (the extraction pipeline the plan describes: 4×2 grid detection,
-  upright rotation, team-bar crops, WebP + manifest + contact sheet) is the next piece of work.
 - **pnpm workspaces, Fastify and Socket.IO.** The plan names them; the repo uses npm, `node:http` and `ws`.
   Same process, same one-port shape, same reconnect guarantees — see `docs/DECISIONS.md` D8 for the two that
   are still open.
