@@ -9,6 +9,14 @@
 # ---- build -----------------------------------------------------------------------------------------
 FROM node:22-slim AS build
 WORKDIR /app
+
+# better-sqlite3 is a native module and node:22-slim ships no toolchain: `npm ci` dies in node-gyp with
+# "Could not find any Python installation to use" (g++/make are missing too). These are build-stage
+# only — the runtime image below stays slim, and it copies the already-compiled node_modules.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .

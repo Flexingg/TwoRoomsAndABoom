@@ -26,7 +26,11 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      - DOMAIN=${DOMAIN:?set DOMAIN=your.domain when using the https profile}
+      # Compose interpolates the WHOLE file before it applies profiles, so a bare `${DOMAIN:?}`
+      # would make even `docker compose up -d --build` (and `compose config`, and `compose build`)
+      # fail unless DOMAIN was set — while this service only ever runs under the https profile.
+      # A default keeps the plan's one command working; the value is ignored unless caddy runs.
+      - DOMAIN=${DOMAIN:-tworooms.local}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
