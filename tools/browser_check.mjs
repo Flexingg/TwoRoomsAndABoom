@@ -132,7 +132,7 @@ try {
   await host.getByText(/Waiting for the Gambler/).waitFor();
   const gambler = players.find((p) => p.role === "Gambler");
   await gambler.page.getByText("Which team won?").waitFor();
-  await gambler.page.getByRole("button", { name: "Blue Team" }).click();
+  await gambler.page.getByRole("button", { name: "Blue Team", exact: true }).click();
   await host.getByText("All announcements are in.").waitFor();
   await host.getByRole("button", { name: "Everyone reveal!" }).click();
   await host.getByRole("button", { name: "Show who won" }).click();
