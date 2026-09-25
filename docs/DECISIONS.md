@@ -205,3 +205,16 @@ still one tap away, because recognising the printed card is how a player confirm
 **Reasoning:** a pre-game guide is exactly where an invented house rule would get mistaken for the printed
 rules. Anything the rulebook leaves open is labelled as open.
 **Source:** rulebook v3 §2–§5, §7; lead card chart; PLAN.md "App decisions".
+
+### D21. The Docker image is built in CI-of-one: a toolchain in the build stage, and no required DOMAIN
+
+**Choice:** the build stage installs `python3 make g++` before `npm ci`, and the compose file's caddy
+service uses `${DOMAIN:-tworooms.local}` instead of `${DOMAIN:?…}`.
+**Reasoning:** both were found only by *actually building the image*, which STATUS.md had recorded as never
+having been run. `docker compose config` — the check that had stood in for a build — parses a file; it does
+not compile `better-sqlite3`, and it cannot see that compose interpolates the whole file before it applies
+profiles (so a required variable on a profile-gated service breaks the bare, profile-free command the plan
+tells a user to run). The runtime image is unchanged and still slim: the toolchain lives in the build stage
+and only the compiled `node_modules` are copied across.
+**Source:** `Dockerfile`, `docker-compose.yml`, `tools/docker_verify.sh`; the plan's "Deployment with Docker
+Compose"; the real build output quoted in STATUS.md.
