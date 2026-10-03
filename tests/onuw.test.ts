@@ -14,7 +14,7 @@ import {
 } from "../shared/src/onuw/engine.js";
 import { parseOnuw } from "../shared/src/onuw/intents.js";
 import type { NightPick, OnuwAction, OnuwPlayerView, OnuwViewer } from "../shared/src/onuw/protocol.js";
-import { deckSize, MAX_PLAYERS, nightSteps, recommendedDeck, ONUW_ROLES, ROLE_KEYS, type OnuwRole, type StepKey } from "../shared/src/onuw/roles.js";
+import { deckSize, MAX_PLAYERS, nightSteps, recommendedDeck, ONUW_ROLES, ROLE_KEYS, STEP_ORDER, type OnuwRole, type StepKey } from "../shared/src/onuw/roles.js";
 import { seededRng } from "../shared/src/rng.js";
 
 const HOST: OnuwViewer = { kind: "host" };
@@ -95,10 +95,14 @@ describe("ONUW deck", () => {
 
   it("every role in the deck gets its night step, in the rulebook's order — even if it ends up in the center", () => {
     const d = Object.fromEntries(ONUW_ROLES.map((r) => [r.key, r.max])) as Record<OnuwRole, number>;
-    expect(nightSteps(d)).toEqual([
-      "doppelganger", "werewolf", "mysticwolf", "minion", "mason", "seer", "apprentice", "beholder",
-      "robber", "troublemaker", "idiot", "drunk", "insomniac", "doppelInsomniac", "revealer",
-    ]);
+    expect(nightSteps(d)).toEqual(STEP_ORDER);
+    // Dusk comes first (Copycat, Doppelgänger, the Vampires ...), then everyone looks at their Mark, then the night.
+    const order = nightSteps(d);
+    for (const [a, b] of [["copycat", "doppelganger"], ["doppelganger", "vampire"], ["assassin", "marks"], ["marks", "lovers"], ["lovers", "werewolf"], ["insomniac", "beholder"], ["beholder", "revealer"]] as const) {
+      expect(order.indexOf(a), `${a} before ${b}`).toBeLessThan(order.indexOf(b));
+    }
+    // A base-game deck is unchanged: no dusk, no marks.
+    expect(nightSteps(recommendedDeck(10))).toEqual(["werewolf", "minion", "mason", "seer", "robber", "troublemaker", "drunk", "insomniac"]);
   });
 
   it("the deck auto-follows the player count until the host edits it", () => {
@@ -203,7 +207,7 @@ describe("ONUW night", () => {
     vote(s, ids, [2, 2, 3, 2]);
     expect(s.result!.deaths).toEqual([ids[2]]);
     expect(s.result!.players.find((p) => p.id === ids[2])!.finalRole).toBe("robber");
-    expect(s.result!.winners).toEqual({ village: false, werewolf: true, tanner: false });
+    expect(s.result!.winners).toMatchObject({ village: false, werewolf: true, tanner: false });
     expect(s.result!.players.find((p) => p.id === ids[0])!.won).toBe(true);
   });
 

@@ -19,6 +19,7 @@ import {
   type OnuwState,
 } from "../../shared/src/onuw/engine.js";
 import { parseOnuw } from "../../shared/src/onuw/intents.js";
+import { emptyDeck } from "../../shared/src/onuw/roles.js";
 import type { OnuwAction, OnuwClientView, OnuwViewer } from "../../shared/src/onuw/protocol.js";
 import { seededRng, type Rng } from "../../shared/src/rng.js";
 import { clientIp } from "./client-ip.js";
@@ -153,6 +154,20 @@ export class OnuwRoom {
   }
 }
 
+/** Games saved before a role or field existed load with sensible defaults for it. */
+function normalize(state: OnuwState): void {
+  state.options.deck = { ...emptyDeck(), ...state.options.deck };
+  state.options.deckPreset ??= "base";
+  const sec = state.secret;
+  sec.marks ??= {};
+  sec.copycatCopy ??= null;
+  sec.doppelPassive ??= false;
+  sec.vampireTarget ??= null;
+  sec.assassinMarkPlaced ??= false;
+  sec.aaFound ??= {};
+  sec.revealed ??= null;
+}
+
 export class OnuwStore {
   readonly rooms = new Map<string, OnuwRoom>();
   private readonly rng: Rng;
@@ -188,6 +203,7 @@ export class OnuwStore {
         continue;
       }
       for (const p of state.players) p.connected = false;
+      normalize(state);
       const room = this.make(state);
       room.lastActivity = this.clock.now();
       room.schedule();

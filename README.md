@@ -135,11 +135,26 @@ screen sees no cards until the reveal.
   `onuw_games` table of the same `games.db`.
 - **Client:** `client/src/onuw/`: host screen, phone, how-to-play and roles pages.
 
-**Roles and table size.** The 12 base-game roles plus seven from the expansions (Mystic Wolf, Dream Wolf,
-Apprentice Seer, Beholder, Village Idiot, Revealer, Bodyguard) let one game run from 3 to 30 players. Up to
-10 players the recommended deck is the rulebook's: two Werewolves and base roles. Above that it adds
-Werewolves and the expansion roles, then Villagers; at 24 players it is 27 cards with about 5 wolf cards.
-The host can edit any count (box limits: 6 Werewolves, 12 Villagers, 1 of most others, 2 Masons).
+**Roles and table size.** 35 roles from three sets, mixed however the host likes: the 12 base-game roles; 9 from
+Daybreak and the bonus packs (Mystic Wolf, Dream Wolf, Apprentice Seer, Beholder, Village Idiot, Revealer,
+Bodyguard, Prince, Cursed); and the 14 from **One Night Ultimate Vampire** (Copycat, Vampire, The Master, The
+Count, Renfield, Diseased, Cupid, Instigator, Priest, Assassin, Apprentice Assassin, Marksman, Pickpocket,
+Gremlin). One game runs from 3 to 30 players. Two recommended decks follow the player count: the *Werewolf
+deck* (the rulebook's up to 10 players, then more Werewolves, expansion roles and Villagers) and the *Vampire
+deck*. The host can edit any count (box limits: 6 Werewolves, 3 Vampires, 12 Villagers, 2 Masons, 1 of most others).
+
+**Vampire in the app.** Vampire adds a **Dusk** before the night and **Marks**: tokens that change a player's team
+or win condition without touching their card. Everyone starts with Clarity; the Vampire pack, Count, Diseased,
+Cupid, Instigator, Priest, Assassins, Pickpocket and Gremlin move the others around. After dusk each phone shows
+its player their own Mark, the lovers wake and see each other, and the night follows. `shared/src/onuw/outcome.ts`
+is the one place deaths and wins are decided: the Master's protection, Renfield, lovers, the Prince, the
+Cursed, the Traitor, Disease, the Assassins, and the **Epic Battle** (Vampires, Werewolves and villagers all in
+play: two or more players die). The rules were taken from the Bezier Games Vampire rules PDF, not from memory.
+
+**Not included: One Night Ultimate Alien.** Its roles depend on the One Night phone app to randomise what they do
+each game, and the rules alone don't define those actions. Daybreak and bonus-pack roles beyond those above (Alpha
+Wolf, Witch, Paranormal Investigator, Sentinel, Curator, Squire, Thing, Aura Seer, Apprentice Tanner, Empath, Body
+Snatcher, Nostradamus) need their rules text to be added correctly.
 
 **Running a game:** open `/werewolf` on a shared screen and press **Create a game**. Players scan the QR code.
 The deck follows the player count automatically (players + 3) until the host edits it. **Deal**, everyone

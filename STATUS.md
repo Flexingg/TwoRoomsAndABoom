@@ -12,6 +12,16 @@ Last updated: 2026-09-25 14:50 EDT (rules review of the pre-game pages; Docker i
   `tools/browser_check.mjs` and `tools/pregame_check.mjs` were re-run after the route change → PASS.
 - Not done: no publisher art for One Night (glyphs only); no Vampire/Alien/Daybreak roles beyond the seven added.
 
+## One Night Vampire expansion (2026-10-03)
+
+- 14 Vampire-box roles plus Prince and Cursed: dusk steps, Marks, Copycat, the vampire pack, lovers, Assassins,
+  Marksman/Pickpocket/Gremlin, and win rules incl. the Master and the Epic Battle (`shared/src/onuw/outcome.ts`).
+  Written from the supplied rules PDF. 35 roles in total; a "Vampire deck" preset; the lobby groups cards by set.
+- Beholder moved to its official place (late, after the Insomniac) and the Revealer's Doppelgänger now wakes after
+  the Revealer, per the supplied wake-order list.
+- `npm test` → 331 tests. `node tools/onuw_check.mjs --players 12 --preset vampire` plays a whole game in a browser.
+- NOT done: Alien (needs the One Night app's random actions) and the other bonus-pack roles (rules not supplied).
+
 ## One Night to 30 players + Fly.io (2026-10-03)
 
 - One Night now runs 3–30 players: seven more roles (Mystic Wolf, Dream Wolf, Apprentice Seer, Beholder,

@@ -11,7 +11,7 @@ const deck = z.object(Object.fromEntries(ROLE_KEYS.map((k) => [k, count.optional
 
 const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("host:deck"), deck }).strict(),
-  z.object({ type: z.literal("host:deckAuto") }).strict(),
+  z.object({ type: z.literal("host:deckAuto"), preset: z.enum(["base", "vampire"]).optional() }).strict(),
   z
     .object({
       type: z.literal("host:options"),
@@ -36,6 +36,8 @@ const action = z.discriminatedUnion("type", [
           players: z.array(id).max(2).optional(),
           centers: z.array(z.number().int().min(0).max(2)).max(2).optional(),
           dir: z.enum(["up", "down"]).optional(),
+          marks: z.array(id).max(1).optional(),
+          what: z.enum(["cards", "marks"]).optional(),
           skip: z.boolean().optional(),
         })
         .strict(),

@@ -1,7 +1,10 @@
 // What goes over /ws/onuw. Phones send small intents (intents.ts validates them); the server replies with
 // a full personalised view minted by onuwViewFor() — the only thing that ever carries game state.
 
-import type { DeckCounts, OnuwRole, OnuwTeam, StepKey } from "./roles.js";
+import type { DeckCounts, DeckPreset, OnuwRole, OnuwTeam, StepKey } from "./roles.js";
+
+/** The Vampire box's Marks. Every player starts with Clarity; the night moves the others around. */
+export type MarkKind = "clarity" | "vampire" | "fear" | "bat" | "disease" | "love" | "traitor" | "assassin";
 
 export type OnuwPhase = "LOBBY" | "VIEW" | "NIGHT" | "DAY" | "VOTE" | "RESULT";
 
@@ -12,10 +15,15 @@ export type Ref = { player: string } | { center: number };
 export type Learned =
   | { t: "copied"; from: string; role: OnuwRole }
   | { t: "saw"; at: Ref; role: OnuwRole }
-  | { t: "allies"; role: "werewolf" | "mason" | "seer"; ids: string[] }
+  | { t: "allies"; role: "werewolf" | "mason" | "seer" | "vampire" | "love" | "assassin"; ids: string[] }
   | { t: "swapped"; a: Ref; b: Ref }
   | { t: "robbed"; from: string; role: OnuwRole }
   | { t: "moved"; dir: "up" | "down" }
+  | { t: "mark"; mark: MarkKind }
+  | { t: "markof"; id: string; mark: MarkKind }
+  | { t: "placed"; mark: MarkKind; on: string }
+  | { t: "markswap"; a: string; b: string }
+  | { t: "became"; role: OnuwRole }
   | { t: "skipped" }
   | { t: "auto"; note: string };
 
@@ -35,12 +43,26 @@ export type Prompt =
   | { kind: "mysticwolf" }
   | { kind: "apprentice" }
   | { kind: "idiot" }
-  | { kind: "revealer" };
+  | { kind: "revealer" }
+  | { kind: "copycat" }
+  | { kind: "vampire" }
+  | { kind: "count" }
+  | { kind: "diseased" }
+  | { kind: "cupid" }
+  | { kind: "instigator" }
+  | { kind: "priest" }
+  | { kind: "assassin" }
+  | { kind: "apprenticeassassin" }
+  | { kind: "marksman" }
+  | { kind: "pickpocket" }
+  | { kind: "gremlin" };
 
 export interface OnuwOptions {
   deck: DeckCounts;
   /** true = the deck follows the player count automatically until the host edits it. */
   deckAuto: boolean;
+  /** Which recommended deck the automatic deck follows. */
+  deckPreset: DeckPreset;
   stepSeconds: number;
   dayMinutes: number;
 }
@@ -58,8 +80,10 @@ export interface ResultPlayer {
   startRole: OnuwRole;
   /** The card in front of them at the end of the night. */
   finalCard: OnuwRole;
-  /** What that card makes them — the Doppelgänger card is whatever it copied. */
+  /** What that card makes them: a Doppelgänger or Copycat card is whatever it copied; a Cursed hit by a Werewolf is one. */
   finalRole: OnuwRole;
+  /** Their Mark at the end of the game. */
+  mark: MarkKind;
   team: OnuwTeam;
   votedFor: string | null;
   votes: number;
@@ -73,7 +97,10 @@ export interface OnuwResult {
   center: Array<{ start: OnuwRole; final: OnuwRole }>;
   doppelCopy: OnuwRole | null;
   deaths: string[];
-  winners: { village: boolean; werewolf: boolean; tanner: boolean };
+  winners: { village: boolean; werewolf: boolean; tanner: boolean; vampire: boolean; assassin: boolean };
+  /** True when Vampires, Werewolves and villagers were all in play: two or more players die. */
+  epic: boolean;
+  copycatCopy: OnuwRole | null;
   summary: string[];
 }
 
@@ -128,14 +155,18 @@ export type OnuwViewer = { kind: "host" } | { kind: "player"; id: string };
 export interface NightPick {
   players?: string[];
   centers?: number[];
-  /** The Village Idiot's direction along the player list. */
+  /** The Village Idiot's (and the Diseased's) direction along the player list. */
   dir?: "up" | "down";
+  /** The Marksman's pick of a player whose Mark to look at. */
+  marks?: string[];
+  /** The Gremlin's choice of what to switch. */
+  what?: "cards" | "marks";
   skip?: boolean;
 }
 
 export type OnuwAction =
   | { type: "host:deck"; deck: Partial<DeckCounts> }
-  | { type: "host:deckAuto" }
+  | { type: "host:deckAuto"; preset?: DeckPreset }
   | { type: "host:options"; stepSeconds?: number; dayMinutes?: number }
   | { type: "host:kick"; playerId: string }
   | { type: "host:start" }

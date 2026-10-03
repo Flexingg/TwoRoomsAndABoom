@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { OnuwAction, OnuwHostView } from "../../../shared/src/onuw/protocol";
-import { CENTER_CARDS, deckSize, ONUW_ROLES, STEP_TEXT } from "../../../shared/src/onuw/roles";
+import { CENTER_CARDS, deckSize, DUSK_STEPS, ONUW_ROLES, STEP_TEXT, type OnuwSet } from "../../../shared/src/onuw/roles";
 import { Qr } from "../Host";
 import { Btn, ConnBadge, ErrorBanner, Section } from "../ui";
 import type { Status } from "../useGame";
@@ -151,6 +151,12 @@ function HostGame({ view, offset, act, forget, status }: { view: OnuwHostView; o
   );
 }
 
+const SET_TITLE: Record<OnuwSet, string> = {
+  base: "Base game",
+  extra: "Daybreak and bonus packs",
+  vampire: "Vampire (dusk and Marks)",
+};
+
 function Lobby({ view, act }: { view: OnuwHostView; act: (a: OnuwAction) => void }) {
   const joinUrl = `${window.location.origin}/werewolf/play?code=${view.code}`;
   const d = view.options.deck;
@@ -189,12 +195,24 @@ function Lobby({ view, act }: { view: OnuwHostView; act: (a: OnuwAction) => void
             {have} / {need} cards
           </span>
           <span className="text-sm text-zinc-400">(one per player, plus {CENTER_CARDS} in the center)</span>
-          <Btn small kind={view.options.deckAuto ? "primary" : "ghost"} className="ml-auto" onClick={() => act({ type: "host:deckAuto" })}>
-            {view.options.deckAuto ? "✓ Recommended deck" : "Use the recommended deck"}
-          </Btn>
+          <div className="ml-auto flex gap-2 flex-wrap">
+            {(["base", "vampire"] as const).map((preset) => {
+              const on = view.options.deckAuto && view.options.deckPreset === preset;
+              return (
+                <Btn key={preset} small kind={on ? "primary" : "ghost"} onClick={() => act({ type: "host:deckAuto", preset })}>
+                  {on ? "✓ " : ""}
+                  {preset === "base" ? "Werewolf deck" : "Vampire deck"}
+                </Btn>
+              );
+            })}
+          </div>
         </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {ONUW_ROLES.map((r) => (
+        <p className="mt-1 text-xs text-zinc-500">The recommended deck follows the player count until you change a card. Mix the sets however you like.</p>
+        {(Object.keys(SET_TITLE) as OnuwSet[]).map((group) => (
+        <div key={group} className="mt-4">
+        <h3 className="text-xs uppercase tracking-widest text-zinc-400 mb-2">{SET_TITLE[group]}</h3>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {ONUW_ROLES.filter((r) => r.set === group).map((r) => (
             <div key={r.key} className="flex items-center gap-2 rounded-xl border border-zinc-800 px-3 py-2">
               <RoleChip role={r.key} muted={d[r.key] === 0} />
               <div className="ml-auto flex items-center gap-1">
@@ -221,6 +239,8 @@ function Lobby({ view, act }: { view: OnuwHostView; act: (a: OnuwAction) => void
             </div>
           ))}
         </div>
+        </div>
+        ))}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
             <div className="text-xs uppercase tracking-widest text-zinc-400 mb-1">Time per night role</div>
@@ -249,7 +269,9 @@ function Lobby({ view, act }: { view: OnuwHostView; act: (a: OnuwAction) => void
               ! {p}
             </div>
           ))}
-          {d.werewolf === 0 && <div className="text-zinc-400">• No Werewolves in the deck — legal, but the village wins only if nobody dies.</div>}
+          {d.werewolf + d.mysticwolf + d.dreamwolf + d.vampire + d.master + d.count === 0 && (
+            <div className="text-zinc-400">• No Werewolves or Vampires in the deck — legal, but the village wins only if nobody dies.</div>
+          )}
           {d.mason === 1 && <div className="text-zinc-400">• Masons are usually played as a pair.</div>}
         </div>
         <Btn className="mt-4 w-full" disabled={!view.deckOk} onClick={() => act({ type: "host:start" })}>
@@ -268,7 +290,7 @@ function Night({ view, offset }: { view: OnuwHostView; offset: number }) {
       <Section>
         <div className="text-center">
           <div className="text-xs uppercase tracking-widest text-zinc-400">
-            Night · step {view.stepIndex + 1} of {view.steps.length}
+            {DUSK_STEPS.has(step) ? "Dusk" : "Night"} · step {view.stepIndex + 1} of {view.steps.length}
           </div>
           <div className="mt-1 text-4xl font-black">{STEP_TEXT[step].title}</div>
           <p className="mt-3 text-xl text-zinc-200 max-w-2xl mx-auto">{STEP_TEXT[step].wake}</p>

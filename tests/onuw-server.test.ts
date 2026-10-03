@@ -258,3 +258,45 @@ describe("joining from one shared IP (a whole party on one venue Wi-Fi, or behin
     await b.until((v) => v.kind === "player");
   });
 });
+
+describe("games saved before the Vampire update", () => {
+  it("load with defaults for the new fields and keep playing", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const Database = (await import("better-sqlite3")).default;
+    const dbPath = join(mkdtempSync(join(tmpdir(), "onuw-old-")), "games.db");
+    await app.close();
+    app = await createApp({ port: 0, host: "127.0.0.1", distDir: null, seed: 8, clock, dbPath });
+    const host = await client();
+    host.send({ type: "create" });
+    const hv = await host.until<OnuwHostView>((v) => v.kind === "host");
+    const token = hv.hostToken;
+    for (const c of clients.splice(0)) c.close();
+    await app.close();
+
+    // Strip everything the update added, as an old snapshot would be.
+    const db = new Database(dbPath);
+    const row = db.prepare("SELECT snapshot FROM onuw_games WHERE code = ?").get(hv.code) as { snapshot: string };
+    const state = JSON.parse(row.snapshot);
+    for (const k of ["vampire", "master", "count", "copycat", "prince", "cursed"]) delete state.options.deck[k];
+    delete state.options.deckPreset;
+    for (const k of ["marks", "copycatCopy", "doppelPassive", "vampireTarget", "assassinMarkPlaced", "aaFound"]) delete state.secret[k];
+    db.prepare("UPDATE onuw_games SET snapshot = ? WHERE code = ?").run(JSON.stringify(state), hv.code);
+    db.close();
+
+    app = await createApp({ port: 0, host: "127.0.0.1", distDir: null, seed: 8, clock, dbPath });
+    const back = await client();
+    back.send({ type: "resume", code: hv.code, token });
+    const v = await back.until<OnuwHostView>((x) => x.kind === "host");
+    expect(v.options.deckPreset).toBe("base");
+    expect(v.options.deck.vampire).toBe(0);
+    for (let i = 0; i < 3; i++) {
+      const c = await client();
+      c.send({ type: "join", code: hv.code, name: `Old${i}` });
+      await c.until((x) => x.kind === "player");
+    }
+    back.act({ type: "host:start" });
+    await back.until((x) => x.phase === "VIEW");
+  });
+});
