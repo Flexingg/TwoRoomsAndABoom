@@ -33,7 +33,7 @@ const noSideScroll = async (label) => {
 };
 
 // ---- the landing screen offers both pages, with no session and no code -------------------------
-await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+await page.goto(`${BASE}/two-rooms`, { waitUntil: "networkidle" });
 const landHost = await page.locator("body").innerText();
 ok(/How to play/i.test(landHost) && /Roles explorer/i.test(landHost), "host landing screen links to both guides");
 await page.screenshot({ path: `${SHOTS}/01-landing-host.png`, fullPage: false });
@@ -44,7 +44,7 @@ ok(/How to play/i.test(landPlay) && /Roles explorer/i.test(landPlay), "player la
 await page.screenshot({ path: `${SHOTS}/02-landing-play.png`, fullPage: false });
 
 // ---- How to Play, opened by clicking the link on the landing screen ----------------------------
-await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+await page.goto(`${BASE}/two-rooms`, { waitUntil: "networkidle" });
 await page.getByRole("link", { name: /^How to play$/i }).click();
 await page.waitForURL(/\/how-to-play$/);
 await page.waitForSelector("h1");

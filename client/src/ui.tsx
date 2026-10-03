@@ -93,7 +93,8 @@ export function GuideNav({ page }: { page: "how-to-play" | "roles" }) {
   );
   return (
     <nav className="flex gap-2 overflow-x-auto pb-1 -mb-1">
-      {link("/", "Start a game", false)}
+      {link("/", "All games", false)}
+      {link("/two-rooms", "Start a game", false)}
       {link("/play", "Join a game", false)}
       {link("/how-to-play", "How to play", page === "how-to-play")}
       {link("/roles", "Roles", page === "roles")}

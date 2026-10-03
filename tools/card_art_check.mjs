@@ -61,7 +61,7 @@ try {
   const hostCtx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const host = await hostCtx.newPage();
   pages.push(["host", host]);
-  await host.goto(`${BASE}/`);
+  await host.goto(`${BASE}/two-rooms`);
   await host.getByRole("button", { name: "Create a game" }).click();
   const code = (await host.locator("header .text-5xl").innerText()).trim();
   log("game", code);

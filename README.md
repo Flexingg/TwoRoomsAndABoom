@@ -1,4 +1,14 @@
-# Two Rooms and a Boom — phone edition
+# Game Night — Two Rooms and a Boom · One Night Ultimate Werewolf
+
+The homepage (`/`) lets the table pick a game:
+
+| | Host screen | Join (phones) | Rules | Roles |
+| --- | --- | --- | --- | --- |
+| **Two Rooms and a Boom** | `/two-rooms` | `/play` | `/how-to-play` | `/roles` |
+| **One Night Ultimate Werewolf** | `/werewolf` | `/werewolf/play` | `/werewolf/how-to-play` | `/werewolf/roles` |
+
+Two Rooms kept its original join and guide paths so printed QR codes and bookmarks still work; they are also
+reachable under `/two-rooms/…`. The rest of this README up to the One Night section is about Two Rooms.
 
 A real-time web app that replaces the paper components of **Two Rooms and a Boom** (Alan Gerding & Sean McCoy,
 Tuesday Knight Games). Everyone keeps playing the real party game in two real rooms — the app is the card in
@@ -53,13 +63,13 @@ systemctl --user status tworooms        # unit in deploy/tworooms.service, logs 
 systemctl --user restart tworooms       # after `npm run build`
 ```
 
-Deployed here at **http://192.168.1.146:8790/** (host screen) — that is the URL to open on the table screen.
+Deployed here at **http://192.168.1.146:8790/** (the homepage: pick a game, then **Host a game** on the table screen).
 Also reachable as http://hermes-pc.local:8790/ depending on the network.
 
 ## Before you start: the two pre-game pages
 
 Both are open to anyone on the network, with **no session, no room code and no login**, so a group can read
-them on their own phones while they wait. They are linked from the host landing screen (`/`) and from the
+them on their own phones while they wait. They are linked from the Two Rooms host screen (`/two-rooms`) and from the
 join screen (`/play`).
 
 - **`/how-to-play`** — the rules as a new player needs them: the premise, the same-room/different-room win
@@ -80,7 +90,7 @@ the engine's catalogue agree in both directions — add a role to one side only 
 
 **One screen on the table (a laptop or tablet):**
 
-1. Open `http://192.168.1.146:8790/` and press **Create a game**.
+1. Open `http://192.168.1.146:8790/two-rooms` (or the homepage → Two Rooms → **Host a game**) and press **Create a game**.
 2. The screen shows a **4-letter room code** and a QR code. Leave it up for the whole game.
 3. Set the options while people trickle in: basic (President, Bomber, Red ×N, Blue ×N, plus the Gambler on an
    odd count) or advanced, and whether to play 3 rounds or 5 (5/4/3/2/1-minute rounds — only possible above
@@ -111,6 +121,45 @@ player count and round. The host then starts the next round, which performs the 
 
 If a phone sleeps, loses Wi-Fi, or the browser is closed, reopening the join page puts that player straight
 back in their seat with the same card, the same room and the same leader status — the counter is not reset.
+
+## One Night Ultimate Werewolf
+
+The second game runs from the same server and port with its own rules engine and socket path (`/ws/onuw`). It
+has the same hidden-information discipline as Two Rooms: one projection, `onuwViewFor()`, decides what each
+socket sees. A phone sees the card it was dealt and what it learned at night, and nothing else. The host
+screen sees no cards until the reveal.
+
+- **Engine:** `shared/src/onuw/roles.ts` (the 12 base-game roles, the night order, the narration, the
+  recommended deck), `engine.ts` (deal, night, day, vote, win resolution, the projection), `intents.ts` (Zod).
+- **Server:** `server/src/onuw.ts`: rooms, the server-owned night/day timers, and SQLite snapshots in the
+  `onuw_games` table of the same `games.db`.
+- **Client:** `client/src/onuw/`: host screen, phone, how-to-play and roles pages.
+
+**Running a game:** open `/werewolf` on a shared screen and press **Create a game**. Players scan the QR code.
+The deck follows the player count automatically (players + 3) until the host edits it. **Deal**, everyone
+looks at their card and taps *I've seen it*, and then the night runs. The host screen calls each role in the
+rulebook's order and can read it aloud with the browser's speech synthesis. Each phone buzzes and asks for
+its own action: Doppelgänger, lone Werewolf, Seer, Robber, Troublemaker, Drunk. The Werewolves, Minion,
+Masons and Insomniac are shown what they see automatically. Every role in the deck gets its step, and every
+step lasts the same fixed time (8/12/20 s), whether or not anyone holds that card, so the night's length
+gives nothing away. Then comes the day timer (3–10 min, +1 min, or vote early), a secret simultaneous vote
+on the phones, and the reveal. The reveal shows who was dealt what, who ended as what, who died, who won,
+and the whole night in order.
+
+**Rule calls the rulebook leaves open** (also on `/werewolf/how-to-play`):
+- If no player is a Werewolf and only the Minion dies, nobody wins.
+- The Tanner dying stops the whole werewolf team, the Minion included.
+- A Doppelgänger who copied the Minion sees the Werewolves at the Minion's step.
+- If a player's step times out, their optional action is skipped. The Drunk's swap and the Doppelgänger's
+  copy are mandatory, so the phone picks at random.
+
+**Tests:** `tests/onuw.test.ts` covers the deck, every night role, the Doppelgänger, the timing, the vote,
+every win case, and the hidden-information property. `tests/onuw-server.test.ts` plays a whole game over
+real WebSockets, reconnects a phone mid-vote, and restarts the server mid-night.
+`node tools/onuw_check.mjs` checks the homepage, both Werewolf pages, and a 4-phone game in a real browser.
+Screenshots are in `docs/screenshots/onuw/`. Set `CHROMIUM_PATH` if your Playwright browser build differs.
+
+The app ships no Bezier Games art: roles are shown as text with a glyph.
 
 ## Rules summary (from the publisher's sheets in `printable_files/`)
 
@@ -152,7 +201,9 @@ contradictions and how they were resolved recorded in **docs/DECISIONS.md**.
 ```
 shared/src/      rules engine: roles.ts, deck.ts, hostages.ts, state.ts, win.ts, view.ts, protocol.ts, sealed.ts
 server/src/      http + websocket transport, rooms, connections
-client/src/      React host screen (Host.tsx) and player screen (Player.tsx)
+client/src/      React: the homepage (Home.tsx), Two Rooms host (Host.tsx) and player (Player.tsx) screens
+client/src/onuw/ One Night Ultimate Werewolf: host, phone, how to play, roles
+shared/src/onuw/ the One Night rules engine (roles, engine, intents, protocol)
 tests/           vitest: deck, hostages, win, exchange, leaders, timer, server, card art, and the
                  hidden-information property
 tools/           extract_sheets.sh (re-extract the sheets), browser_check.mjs (real-browser end-to-end),
@@ -221,6 +272,7 @@ bash tools/wire_mutation_proof.sh         # ...and the wire check fails against 
 node tools/browser_check.mjs              # a real Chromium: host + 7 phones play a whole game
 node tools/browser_check.mjs --attach --port 8790   # the same, against the running service
 node tools/pregame_check.mjs                        # /how-to-play and /roles: render, search, filter
+node tools/onuw_check.mjs                           # homepage + One Night: rules pages and a 4-phone game
 node tools/pregame_check.mjs --port 8799            # the same, against a server you spawned yourself
 node tools/card_art_check.mjs --port 8799           # 12 phones: hold-to-flip, card share, colour share,
                                                     # the leader card — against the real built client

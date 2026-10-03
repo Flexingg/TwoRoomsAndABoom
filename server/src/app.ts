@@ -13,6 +13,7 @@ import { addPlayer, GameError, viewerForToken } from "../../shared/src/state.js"
 import { viewFor } from "../../shared/src/view.js";
 import { Connection } from "./connection.js";
 import { cryptoRng } from "./crypto-rng.js";
+import { createOnuwHub, type OnuwHub } from "./onuw.js";
 import type { Clock } from "./room.js";
 import { realClock } from "./room.js";
 import { Store } from "./store.js";
@@ -48,6 +49,7 @@ export interface AppOptions {
 export interface App {
   http: Server;
   store: Store;
+  onuw: OnuwHub;
   port(): number;
   close(): Promise<void>;
 }
@@ -98,6 +100,8 @@ export function createApp(opts: AppOptions): Promise<App> {
   const store = new Store(opts.seed, clock, opts.dbPath ?? null);
   const startedAt = clock.now();
   const joinAttempts = new Map<string, { n: number; resetAt: number }>();
+  // One Night Ultimate Werewolf: its own engine and its own socket path, same process and port.
+  const onuw = createOnuwHub({ clock, seed: opts.seed, dbPath: opts.dbPath ?? null });
 
   const http = createHttpServer((req, res) => {
     // The plan's health check reports the active game count.
@@ -110,6 +114,7 @@ export function createApp(opts: AppOptions): Promise<App> {
             games: store.activeCount(),
             players: store.playerCount(),
             gamesTotal: store.rooms.size,
+            werewolfGames: onuw.store.activeCount(),
             uptimeSec: Math.round((clock.now() - startedAt) / 1000),
           }),
         );
@@ -120,7 +125,12 @@ export function createApp(opts: AppOptions): Promise<App> {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
 
   http.on("upgrade", (req, socket, head) => {
-    if (new URL(req.url ?? "/", "http://x").pathname !== "/ws") {
+    const pathname = new URL(req.url ?? "/", "http://x").pathname;
+    if (pathname === "/ws/onuw") {
+      onuw.wss.handleUpgrade(req, socket, head, (ws) => onuw.wss.emit("connection", ws, req));
+      return;
+    }
+    if (pathname !== "/ws") {
       socket.destroy();
       return;
     }
@@ -249,6 +259,7 @@ export function createApp(opts: AppOptions): Promise<App> {
       }
     }
     store.sweep();
+    onuw.heartbeat(now);
   }, 30_000);
   heartbeat.unref();
 
@@ -257,6 +268,7 @@ export function createApp(opts: AppOptions): Promise<App> {
       resolveApp({
         http,
         store,
+        onuw,
         port: () => {
           const a = http.address();
           return typeof a === "object" && a ? a.port : opts.port;
@@ -265,6 +277,7 @@ export function createApp(opts: AppOptions): Promise<App> {
           new Promise<void>((done) => {
             clearInterval(heartbeat);
             store.dispose();
+            onuw.close();
             wss.close();
             http.close(() => done());
             http.closeAllConnections();

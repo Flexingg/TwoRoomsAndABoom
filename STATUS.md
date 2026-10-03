@@ -2,6 +2,16 @@
 
 Last updated: 2026-09-25 14:50 EDT (rules review of the pre-game pages; Docker image built and verified; card art re-verified by eye)
 
+## Homepage + One Night Ultimate Werewolf (2026-10-03)
+
+- `/` is now a game picker. Two Rooms' host screen moved to `/two-rooms`. `/play`, `/how-to-play` and `/roles`
+  are unchanged, so existing QR codes still work. The Two Rooms URLs below are otherwise still correct.
+- One Night Ultimate Werewolf is at `/werewolf` (host), `/werewolf/play`, `/werewolf/how-to-play` and
+  `/werewolf/roles`. It has its own engine (`shared/src/onuw/`), socket (`/ws/onuw`) and SQLite table.
+- Suite: `npm test` → **282 tests, 14 files, all green** (26 new). `node tools/onuw_check.mjs` → ALL PASS.
+  `tools/browser_check.mjs` and `tools/pregame_check.mjs` were re-run after the route change → PASS.
+- Not done: no publisher art for One Night (glyphs only), base-game roles only (no Daybreak/Vampire).
+
 ## TL;DR
 
 The app runs on this machine as a systemd user service and has been driven end to end in a **real browser**

@@ -14,6 +14,9 @@ export function Host() {
     return (
       <main className="mx-auto max-w-xl p-6 space-y-6">
         <ConnBadge status={status} />
+        <a href="/" className="text-sm text-zinc-400">
+          ← All games
+        </a>
         <h1 className="text-4xl font-black leading-tight">
           Two Rooms
           <br />
@@ -89,7 +92,7 @@ function HostGame({ view, offset, act, onForget, status }: { view: HostView; off
   );
 }
 
-function Qr({ text }: { text: string }) {
+export function Qr({ text }: { text: string }) {
   const [src, setSrc] = useState("");
   useEffect(() => {
     void QRCode.toDataURL(text, { margin: 1, width: 360, color: { dark: "#000000", light: "#ffffff" } }).then(setSrc);
