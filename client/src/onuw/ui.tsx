@@ -1,14 +1,39 @@
 import { useState, type ReactNode } from "react";
-import type { Learned, LearnedEntry, OnuwResult, Ref, RosterEntry } from "../../../shared/src/onuw/protocol";
+import type { Learned, LearnedEntry, MarkKind, OnuwResult, Ref, RosterEntry } from "../../../shared/src/onuw/protocol";
 import { ONUW_ROLES, ROLE_BY_KEY, STEP_ORDER, STEP_TEXT, type OnuwRole, type OnuwTeam } from "../../../shared/src/onuw/roles";
 import { fmt, Section, useRemaining } from "../ui";
 
-export const TEAM_NAME: Record<OnuwTeam, string> = { village: "Village", werewolf: "Werewolf", tanner: "Tanner" };
+export const TEAM_NAME: Record<OnuwTeam, string> = { village: "Village", werewolf: "Werewolf", tanner: "Tanner", vampire: "Vampire", assassin: "Assassin" };
+
+export const MARK_NAME: Record<MarkKind, string> = {
+  clarity: "Clarity",
+  vampire: "the Vampire",
+  fear: "Fear",
+  bat: "the Bat",
+  disease: "Disease",
+  love: "Love",
+  traitor: "the Traitor",
+  assassin: "the Assassin",
+};
+
+/** What a Mark means, in a few words. */
+export const MARK_MEANING: Record<MarkKind, string> = {
+  clarity: "Nothing: your card and team are what they say.",
+  vampire: "You're a Vampire now, whatever your card says.",
+  fear: "You can't do your night action.",
+  bat: "Renfield's Mark. It does nothing on its own.",
+  disease: "Anyone who votes for you can't win.",
+  love: "You and your lover die together.",
+  traitor: "You only win if another player on your team dies.",
+  assassin: "The Assassin wins if you die.",
+};
 
 export const TEAM_TONE: Record<OnuwTeam, { bg: string; text: string; ring: string }> = {
   village: { bg: "bg-sky-900/60", text: "text-sky-200", ring: "border-sky-700" },
   werewolf: { bg: "bg-rose-900/60", text: "text-rose-200", ring: "border-rose-700" },
   tanner: { bg: "bg-amber-900/60", text: "text-amber-200", ring: "border-amber-700" },
+  vampire: { bg: "bg-purple-900/60", text: "text-purple-200", ring: "border-purple-700" },
+  assassin: { bg: "bg-slate-800", text: "text-slate-200", ring: "border-slate-500" },
 };
 
 export function roleName(r: OnuwRole): string {
@@ -116,6 +141,9 @@ export function describeLearned(e: LearnedEntry, roster: RosterEntry[], me: stri
       if ("player" in it.at && it.at.player === me) return `Looked at own card: the ${roleName(it.role)}.`;
       return `Saw ${refText(it.at, roster, me)}: the ${roleName(it.role)}.`;
     case "allies":
+      if (it.role === "vampire") return it.ids.length ? `The other Vampire${it.ids.length > 1 ? "s are" : " is"} ${names(it.ids)}.` : "You're the only Vampire.";
+      if (it.role === "love") return it.ids.length ? `You're in love with ${names(it.ids)}. If one of you dies, so does the other.` : "You have the Mark of Love, but nobody shares it.";
+      if (it.role === "assassin") return it.ids.length ? `The Assassin is ${names(it.ids)}.` : "Nobody is the Assassin.";
       if (it.role === "seer") return it.ids.length ? `The Seer is ${names(it.ids)}.` : "Nobody is the Seer — that card is in the center.";
       if (it.role === "mason") return it.ids.length ? `The other Mason${it.ids.length > 1 ? "s are" : " is"} ${names(it.ids)}.` : "No other Mason — the other Mason card is in the center.";
       if (e.step === "minion") return it.ids.length ? `The Werewolf${it.ids.length > 1 ? "ves are" : " is"} ${names(it.ids)}.` : "No player woke as a Werewolf.";
@@ -123,6 +151,22 @@ export function describeLearned(e: LearnedEntry, roster: RosterEntry[], me: stri
     case "swapped":
       if ("player" in it.a && it.a.player === me && "center" in it.b) return `Swapped own card with center card ${it.b.center + 1} (without looking).`;
       return `Swapped ${refText(it.a, roster, me)} with ${refText(it.b, roster, me)} (without looking).`;
+    case "mark":
+      return `Your Mark is the Mark of ${MARK_NAME[it.mark]}. ${MARK_MEANING[it.mark]}`;
+    case "markof":
+      return `${nameIn(roster, it.id)}'s Mark is the Mark of ${MARK_NAME[it.mark]}.`;
+    case "placed": {
+      if (e.step === "renfield" && it.mark === "vampire") return `The Vampires are pointing at ${nameIn(roster, it.on)}: they have the Mark of the Vampire.`;
+      if (it.mark === "bat") return "You took the Mark of the Bat. Your old Mark is gone.";
+      if (it.mark === "clarity" && it.on === me) return "You cleansed yourself with the Mark of Clarity.";
+      const who = it.on === me ? "yourself" : nameIn(roster, it.on);
+      return `${e.step === "vampire" ? "Your pack gave" : "You gave"} the Mark of ${MARK_NAME[it.mark]} to ${who}.`;
+    }
+    case "markswap":
+      if (it.a === me) return `Exchanged your Mark with ${nameIn(roster, it.b)}'s.`;
+      return `Switched ${it.a === me ? "your" : `${nameIn(roster, it.a)}'s`} Mark with ${it.b === me ? "yours" : `${nameIn(roster, it.b)}'s`} (without looking).`;
+    case "became":
+      return `You are now the ${roleName(it.role)}.`;
     case "moved":
       return `Moved every other player's card ${it.dir} the player list.`;
     case "robbed":
@@ -206,6 +250,7 @@ export function ResultView({ result, roster, me, footer }: { result: OnuwResult;
                 <th className="px-1 py-1 font-normal">Player</th>
                 <th className="px-1 py-1 font-normal">Dealt</th>
                 <th className="px-1 py-1 font-normal">Ended as</th>
+                <th className="px-1 py-1 font-normal">Mark</th>
                 <th className="px-1 py-1 font-normal">Voted</th>
               </tr>
             </thead>
@@ -226,6 +271,7 @@ export function ResultView({ result, roster, me, footer }: { result: OnuwResult;
                   <td className="px-1 py-2 align-top">
                     <RoleChip role={p.finalRole} />
                   </td>
+                  <td className="px-1 py-2 align-top text-xs text-zinc-300">{p.mark === "clarity" ? <span className="text-zinc-600">—</span> : MARK_NAME[p.mark].replace(/^the /, "")}</td>
                   <td className="px-1 py-2 align-top text-zinc-300">{p.votedFor ? nameIn(roster, p.votedFor) : "—"}</td>
                 </tr>
               ))}
@@ -244,6 +290,7 @@ export function ResultView({ result, roster, me, footer }: { result: OnuwResult;
           ))}
         </div>
         {result.doppelCopy && <p className="mt-3 text-sm text-zinc-400">The Doppelgänger copied the {roleName(result.doppelCopy)}.</p>}
+        {result.copycatCopy && <p className="mt-3 text-sm text-zinc-400">The Copycat became the {roleName(result.copycatCopy)}.</p>}
       </Section>
       <Section title="The night, in order">
         <ul className="space-y-2 text-sm">

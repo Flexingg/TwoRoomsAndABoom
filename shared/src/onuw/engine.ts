@@ -7,8 +7,10 @@
 // which hands a phone its own dealt card and what it learned — nothing else — until the RESULT.
 
 import { shuffle, type Rng } from "../rng.js";
+import { resolveOutcome, resolveWinners } from "./outcome.js";
 import type {
   LearnedEntry,
+  MarkKind,
   NightPick,
   OnuwAction,
   OnuwClientView,
@@ -24,6 +26,7 @@ import {
   CENTER_CARDS,
   deckList,
   deckSize,
+  DUSK_STEPS,
   isWolf,
   MAX_PLAYERS,
   MIN_PLAYERS,
@@ -55,6 +58,18 @@ export interface OnuwSecret {
   cards: Record<string, OnuwRole>;
   center: OnuwRole[];
   doppelCopy: OnuwRole | null;
+  /** True when the Doppelgänger copied the Copycat: they just echo its role and wake for nothing. */
+  doppelPassive: boolean;
+  /** The role the Copycat saw in the center. */
+  copycatCopy: OnuwRole | null;
+  /** Everyone's Mark. Clarity unless the night changed it. */
+  marks: Record<string, MarkKind>;
+  /** Who got the Mark of the Vampire (Renfield sees it). */
+  vampireTarget: string | null;
+  /** Was a Mark of the Assassin placed at dusk? */
+  assassinMarkPlaced: boolean;
+  /** For each Apprentice Assassin: did they see an Assassin? */
+  aaFound: Record<string, boolean>;
   /** The card the Revealer left face up. */
   revealed: { id: string; role: OnuwRole } | null;
   learned: Record<string, LearnedEntry[]>;
@@ -98,7 +113,7 @@ export function createOnuwGame(code: string, rng: Rng, now: number): OnuwState {
     phase: "LOBBY",
     players: [],
     nextId: 1,
-    options: { deck: recommendedDeck(MIN_PLAYERS), deckAuto: true, stepSeconds: STEP_SECONDS.default, dayMinutes: DAY_MINUTES.default },
+    options: { deck: recommendedDeck(MIN_PLAYERS), deckAuto: true, deckPreset: "base", stepSeconds: STEP_SECONDS.default, dayMinutes: DAY_MINUTES.default },
     gameNumber: 0,
     steps: [],
     stepIndex: -1,
@@ -110,7 +125,7 @@ export function createOnuwGame(code: string, rng: Rng, now: number): OnuwState {
 }
 
 function emptySecret(hostToken: string, tokens: Record<string, string>): OnuwSecret {
-  return { hostToken, tokens, dealt: {}, centerStart: [], cards: {}, center: [], doppelCopy: null, revealed: null, learned: {}, done: [], votes: {} };
+  return { hostToken, tokens, dealt: {}, centerStart: [], cards: {}, center: [], doppelCopy: null, doppelPassive: false, copycatCopy: null, marks: {}, vampireTarget: null, assassinMarkPlaced: false, aaFound: {}, revealed: null, learned: {}, done: [], votes: {} };
 }
 
 // ---- seats ----------------------------------------------------------------------------------------
@@ -153,7 +168,7 @@ function removePlayer(s: OnuwState, id: string): void {
 }
 
 function followPlayerCount(s: OnuwState): void {
-  if (s.options.deckAuto) s.options.deck = recommendedDeck(s.players.length);
+  if (s.options.deckAuto) s.options.deck = recommendedDeck(s.players.length, s.options.deckPreset ?? "base");
 }
 
 // ---- deck checks ----------------------------------------------------------------------------------
@@ -220,6 +235,7 @@ function hostAction(s: OnuwState, a: OnuwAction, now: number, rng: Rng): void {
     case "host:deckAuto":
       if (s.phase !== "LOBBY") fail("Change the deck in the lobby.");
       s.options.deckAuto = true;
+      if (a.preset) s.options.deckPreset = a.preset;
       followPlayerCount(s);
       return;
     case "host:options":
@@ -279,6 +295,7 @@ function deal(s: OnuwState, rng: Rng): void {
   s.players.forEach((p, i) => {
     sec.dealt[p.id] = cards[i];
     sec.cards[p.id] = cards[i];
+    sec.marks[p.id] = "clarity";
     sec.learned[p.id] = [];
   });
   sec.centerStart = cards.slice(s.players.length);
@@ -304,48 +321,84 @@ function startNight(s: OnuwState, now: number): void {
 }
 
 /** Roles whose action the Doppelgänger does at once, in the Doppelgänger's own step. */
-const ACTIVE_COPIES: OnuwRole[] = ["seer", "apprentice", "robber", "troublemaker", "idiot", "drunk", "revealer", "mysticwolf"];
+const ACTIVE_COPIES: OnuwRole[] = ["seer", "apprentice", "robber", "troublemaker", "idiot", "drunk", "mysticwolf", "diseased", "cupid", "instigator"];
+
+/** Prompts that can't be skipped: when the step's time runs out the phone chooses at random. */
+const MANDATORY = ["doppelganger", "copycat", "drunk", "vampire", "count", "diseased", "assassin", "apprenticeassassin"];
+
+/** Prompts where you may point at yourself. */
+const SELF_OK = ["cupid", "instigator", "assassin", "apprenticeassassin", "gremlin"];
+
+const VAMPIRE_ROLES: OnuwRole[] = ["vampire", "master", "count"];
+const uniq = <T,>(xs: T[]): T[] => [...new Set(xs)];
 
 function holderOf(s: OnuwState, role: OnuwRole): string[] {
   return s.players.filter((p) => s.secret.dealt[p.id] === role).map((p) => p.id);
 }
 
-function doppel(s: OnuwState): string | null {
-  return holderOf(s, "doppelganger")[0] ?? null;
+/** The Copycat wakes at the copied role's own step, alongside that role's holders. */
+function copycatIf(s: OnuwState, role: OnuwRole): string[] {
+  const c = holderOf(s, "copycat")[0];
+  return c && s.secret.copycatCopy === role ? [c] : [];
 }
 
-/** Who woke as a Werewolf (the dealt Werewolves and Mystic Wolf, plus a Doppelgänger who copied one). */
-function nightWolves(s: OnuwState): string[] {
-  const d = doppel(s);
-  const copy = s.secret.doppelCopy;
-  return [...holderOf(s, "werewolf"), ...holderOf(s, "mysticwolf"), ...(d && (copy === "werewolf" || copy === "mysticwolf") ? [d] : [])];
+/** A Doppelgänger who copied this role (and wasn't just echoing a Copycat). */
+function doppelIf(s: OnuwState, role: OnuwRole): string[] {
+  const d = holderOf(s, "doppelganger")[0];
+  return d && s.secret.doppelCopy === role && !s.secret.doppelPassive ? [d] : [];
+}
+
+const markOf = (s: OnuwState, id: string): MarkKind => s.secret.marks[id] ?? "clarity";
+const setMark = (s: OnuwState, id: string, m: MarkKind): void => void (s.secret.marks[id] = m);
+
+/** Everyone who woke as a Werewolf, before any Mark of Fear is considered. */
+function allWolves(s: OnuwState): string[] {
+  return uniq(
+    (["werewolf", "mysticwolf"] as OnuwRole[]).flatMap((r) => [...holderOf(s, r), ...copycatIf(s, r), ...doppelIf(s, r)]),
+  );
 }
 
 /** Wolves the Minion can see: those who woke, plus the Dream Wolf (who never wakes). */
 function minionSees(s: OnuwState): string[] {
-  const d = doppel(s);
-  return [...nightWolves(s), ...holderOf(s, "dreamwolf"), ...(d && s.secret.doppelCopy === "dreamwolf" ? [d] : [])];
+  return uniq([...allWolves(s), ...holderOf(s, "dreamwolf"), ...copycatIf(s, "dreamwolf"), ...doppelIf(s, "dreamwolf")]);
+}
+
+/** Every Vampire, Master and Count — and a Doppelgänger or Copycat who copied one — wakes together at dusk. */
+function vampGroup(s: OnuwState): string[] {
+  return uniq(VAMPIRE_ROLES.flatMap((r) => [...holderOf(s, r), ...copycatIf(s, r), ...doppelIf(s, r)]));
+}
+
+function realAssassins(s: OnuwState): string[] {
+  return uniq([...holderOf(s, "assassin"), ...copycatIf(s, "assassin")]);
 }
 
 /** The players this step wakes. Roles act by the card they were dealt, not the card they hold now. */
 export function actorsFor(s: OnuwState, step: StepKey): string[] {
-  const d = doppel(s);
-  const copied = (r: OnuwRole) => (d && s.secret.doppelCopy === r ? [d] : []);
+  const all = s.players.map((p) => p.id);
+  // A Mark of Fear stops the night action (not dusk, and not just waking to look at your Mark or your lover).
+  const night = (ids: string[]) => (DUSK_STEPS.has(step) ? ids : ids.filter((id) => markOf(s, id) !== "fear"));
+  if (step.startsWith("after:")) return night(doppelIf(s, step.slice(6) as OnuwRole));
   switch (step) {
+    case "marks":
+      return all;
+    case "lovers":
+      return all.filter((id) => markOf(s, id) === "love");
     case "doppelganger":
-      return d ? [d] : [];
+      return holderOf(s, "doppelganger");
+    case "copycat":
+      return holderOf(s, "copycat");
+    case "vampire":
+      return vampGroup(s);
     case "werewolf":
-      return nightWolves(s);
+      return night(allWolves(s));
     case "minion":
-      return [...holderOf(s, "minion"), ...copied("minion")];
     case "mason":
-      return [...holderOf(s, "mason"), ...copied("mason")];
     case "beholder":
-      return [...holderOf(s, "beholder"), ...copied("beholder")];
+      return night(uniq([...holderOf(s, step), ...copycatIf(s, step), ...doppelIf(s, step)]));
     case "doppelInsomniac":
-      return copied("insomniac");
+      return night(doppelIf(s, "insomniac"));
     default:
-      return holderOf(s, step);
+      return night(uniq([...holderOf(s, step as OnuwRole), ...copycatIf(s, step as OnuwRole)]));
   }
 }
 
@@ -357,40 +410,92 @@ function learn(s: OnuwState, id: string, step: StepKey, item: LearnedEntry["item
   (s.secret.learned[id] ??= []).push({ step, item });
 }
 
+const finish1 = (s: OnuwState, ids: string[]): void => void s.secret.done.push(...ids);
+
+/** Players a Vampire pack may mark: anyone who isn't in the pack. */
+function vampTargets(s: OnuwState): string[] {
+  const pack = vampGroup(s);
+  return s.players.map((p) => p.id).filter((id) => !pack.includes(id));
+}
+
+/** Who the Count may frighten: a non-Vampire, and not the player who just got the Mark of the Vampire. */
+function fearTargets(s: OnuwState): string[] {
+  return vampTargets(s).filter((id) => markOf(s, id) !== "vampire");
+}
+
 function startStep(s: OnuwState, now: number): void {
   const step = s.steps[s.stepIndex];
   s.secret.done = [];
   s.phaseEndsAt = now + stepDurationMs(step, s.options.stepSeconds);
   const actors = actorsFor(s, step);
+  const base: string = step.startsWith("after:") ? step.slice(6) : step;
   // The information-only steps resolve the moment they start.
-  if (step === "werewolf") {
-    for (const id of actors) {
-      learn(s, id, step, { t: "allies", role: "werewolf", ids: actors.filter((x) => x !== id) });
-      if (actors.length > 1) s.secret.done.push(id);
+  switch (base) {
+    case "marks":
+      for (const id of actors) learn(s, id, step, { t: "mark", mark: markOf(s, id) });
+      finish1(s, actors);
+      break;
+    case "lovers":
+      for (const id of actors) learn(s, id, step, { t: "allies", role: "love", ids: actors.filter((x) => x !== id) });
+      finish1(s, actors);
+      break;
+    case "werewolf":
+      for (const id of actors) {
+        learn(s, id, step, { t: "allies", role: "werewolf", ids: actors.filter((x) => x !== id) });
+        if (actors.length > 1) s.secret.done.push(id);
+      }
+      break;
+    case "minion":
+      for (const id of actors) learn(s, id, step, { t: "allies", role: "werewolf", ids: minionSees(s).filter((x) => x !== id) });
+      finish1(s, actors);
+      break;
+    case "mason":
+      for (const id of actors) learn(s, id, step, { t: "allies", role: "mason", ids: actors.filter((x) => x !== id) });
+      finish1(s, actors);
+      break;
+    case "beholder": {
+      // The Beholder wakes late: the Seer is whoever holds the Seer card by then.
+      const seers = s.players.map((p) => p.id).filter((id) => s.secret.cards[id] === "seer");
+      for (const id of actors) learn(s, id, step, { t: "allies", role: "seer", ids: seers.filter((x) => x !== id) });
+      finish1(s, actors);
+      break;
     }
-  } else if (step === "minion") {
-    const wolves = minionSees(s);
-    for (const id of actors) {
-      learn(s, id, step, { t: "allies", role: "werewolf", ids: wolves.filter((x) => x !== id) });
-      s.secret.done.push(id);
+    case "insomniac":
+    case "doppelInsomniac":
+      for (const id of actors) learn(s, id, step, { t: "saw", at: { player: id }, role: s.secret.cards[id] });
+      finish1(s, actors);
+      break;
+    case "vampire": {
+      for (const id of actors) learn(s, id, step, { t: "allies", role: "vampire", ids: actors.filter((x) => x !== id) });
+      if (!vampTargets(s).length) finish1(s, actors);
+      break;
     }
-  } else if (step === "mason") {
-    for (const id of actors) {
-      learn(s, id, step, { t: "allies", role: "mason", ids: actors.filter((x) => x !== id) });
-      s.secret.done.push(id);
-    }
-  } else if (step === "beholder") {
-    const d = doppel(s);
-    const seers = [...holderOf(s, "seer"), ...(d && s.secret.doppelCopy === "seer" ? [d] : [])];
-    for (const id of actors) {
-      learn(s, id, step, { t: "allies", role: "seer", ids: seers.filter((x) => x !== id) });
-      s.secret.done.push(id);
-    }
-  } else if (step === "insomniac" || step === "doppelInsomniac") {
-    for (const id of actors) {
-      learn(s, id, step, { t: "saw", at: { player: id }, role: s.secret.cards[id] });
-      s.secret.done.push(id);
-    }
+    case "renfield":
+      for (const id of actors) {
+        const target = s.secret.vampireTarget;
+        learn(s, id, step, { t: "allies", role: "vampire", ids: vampGroup(s).filter((x) => x !== id) });
+        if (target) learn(s, id, step, { t: "placed", mark: "vampire", on: target });
+        setMark(s, id, "bat");
+        learn(s, id, step, { t: "placed", mark: "bat", on: id });
+      }
+      finish1(s, actors);
+      break;
+    case "priest":
+      for (const id of actors) {
+        setMark(s, id, "clarity");
+        learn(s, id, step, { t: "placed", mark: "clarity", on: id });
+      }
+      break;
+    case "apprenticeassassin":
+      for (const id of actors) {
+        const seen = realAssassins(s).filter((x) => x !== id);
+        s.secret.aaFound[id] = seen.length > 0;
+        if (seen.length) {
+          learn(s, id, step, { t: "allies", role: "assassin", ids: seen });
+          s.secret.done.push(id);
+        }
+      }
+      break;
   }
 }
 
@@ -398,23 +503,35 @@ function startStep(s: OnuwState, now: number): void {
 export function promptFor(s: OnuwState, id: string): Prompt | null {
   const step = currentStep(s);
   if (!step || s.secret.done.includes(id) || !actorsFor(s, step).includes(id)) return null;
-  switch (step) {
-    case "doppelganger": {
-      const c = s.secret.doppelCopy;
-      if (c === null) return { kind: "doppelganger" };
-      return ACTIVE_COPIES.includes(c) ? ({ kind: c } as Prompt) : null;
-    }
-    case "werewolf":
-      return { kind: "wolfCenter" };
+  if (step === "doppelganger") {
+    const c = s.secret.doppelCopy;
+    if (c === null) return { kind: "doppelganger" };
+    return !s.secret.doppelPassive && ACTIVE_COPIES.includes(c) ? ({ kind: c } as Prompt) : null;
+  }
+  if (step === "copycat") return s.secret.copycatCopy === null ? { kind: "copycat" } : null;
+  if (step === "werewolf") return { kind: "wolfCenter" };
+  const base = (step.startsWith("after:") ? step.slice(6) : step) as OnuwRole | "marks" | "lovers" | "doppelInsomniac";
+  switch (base) {
+    case "vampire":
+    case "count":
     case "mysticwolf":
     case "seer":
     case "apprentice":
+    case "marksman":
     case "robber":
+    case "pickpocket":
     case "troublemaker":
     case "idiot":
+    case "gremlin":
     case "drunk":
     case "revealer":
-      return { kind: step };
+    case "diseased":
+    case "cupid":
+    case "instigator":
+    case "priest":
+    case "assassin":
+    case "apprenticeassassin":
+      return { kind: base };
     default:
       return null;
   }
@@ -432,29 +549,50 @@ function swap(s: OnuwState, a: Ref, b: Ref): void {
   put(b, ca);
 }
 
+function swapMarks(s: OnuwState, a: string, b: string): void {
+  const ma = markOf(s, a);
+  setMark(s, a, markOf(s, b));
+  setMark(s, b, ma);
+}
+
+/** The player above or below `me` in the player list, wrapping round. */
+function neighbour(s: OnuwState, me: string, dir: "up" | "down"): string {
+  const ids = s.players.map((p) => p.id);
+  const i = ids.indexOf(me);
+  return ids[(i + (dir === "up" ? -1 : 1) + ids.length) % ids.length];
+}
+
 function nightAction(s: OnuwState, me: string, pick: NightPick): void {
   const prompt = promptFor(s, me);
   if (!prompt) fail("There's nothing for you to do right now.");
+  const kind = prompt!.kind;
   const step = currentStep(s)!;
   const players = pick.players ?? [];
   const centers = pick.centers ?? [];
-  for (const p of players) if (!s.players.some((x) => x.id === p)) fail("That player isn't in the game.");
-  if (players.includes(me)) fail("Pick somebody other than yourself.");
+  const markPicks = pick.marks ?? [];
+  for (const p of [...players, ...markPicks]) if (!s.players.some((x) => x.id === p)) fail("That player isn't in the game.");
+  if (!SELF_OK.includes(kind) && [...players, ...markPicks].includes(me)) fail("Pick somebody other than yourself.");
   if (new Set(players).size !== players.length || new Set(centers).size !== centers.length) fail("Pick different cards.");
   for (const c of centers) if (!Number.isInteger(c) || c < 0 || c >= CENTER_CARDS) fail("That isn't a center card.");
   const done = (): void => void s.secret.done.push(me);
+  const none = !players.length && !centers.length && !markPicks.length;
 
   if (pick.skip) {
-    if (prompt!.kind === "doppelganger" || prompt!.kind === "drunk") fail("This one isn't optional.");
+    if (MANDATORY.includes(kind)) fail("This one isn't optional.");
     learn(s, me, step, { t: "skipped" });
     return done();
   }
 
-  switch (prompt!.kind) {
+  switch (kind) {
     case "doppelganger": {
       if (players.length !== 1 || centers.length) fail("Pick one other player.");
-      copy(s, me, players[0]);
+      copyDoppel(s, me, players[0]);
       return;
+    }
+    case "copycat": {
+      if (centers.length !== 1 || players.length) fail("Pick one center card.");
+      copyCenter(s, me, centers[0]);
+      return done();
     }
     case "wolfCenter": {
       if (centers.length !== 1 || players.length) fail("Pick one center card.");
@@ -480,7 +618,7 @@ function nightAction(s: OnuwState, me: string, pick: NightPick): void {
       return done();
     }
     case "idiot": {
-      if (!pick.dir || players.length || centers.length) fail("Pick up or down.");
+      if (!pick.dir || !none) fail("Pick up or down.");
       shift(s, me, pick.dir!);
       learn(s, me, step, { t: "moved", dir: pick.dir! });
       return done();
@@ -511,7 +649,91 @@ function nightAction(s: OnuwState, me: string, pick: NightPick): void {
       learn(s, me, step, { t: "swapped", a: { player: me }, b: { center: centers[0] } });
       return done();
     }
+    case "vampire": {
+      if (players.length !== 1 || centers.length) fail("Pick one player to mark.");
+      if (!vampTargets(s).includes(players[0])) fail("That player is already a Vampire.");
+      placeVampire(s, players[0]);
+      return;
+    }
+    case "count": {
+      if (players.length !== 1 || centers.length) fail("Pick one player to frighten.");
+      if (!fearTargets(s).includes(players[0])) fail("The Count can't frighten a Vampire.");
+      setMark(s, players[0], "fear");
+      learn(s, me, step, { t: "placed", mark: "fear", on: players[0] });
+      return done();
+    }
+    case "diseased": {
+      if (!pick.dir || !none) fail("Pick up or down.");
+      const target = neighbour(s, me, pick.dir!);
+      setMark(s, target, "disease");
+      learn(s, me, step, { t: "placed", mark: "disease", on: target });
+      return done();
+    }
+    case "cupid": {
+      if (players.length !== 2 || centers.length) fail("Pick two players.");
+      for (const p of players) {
+        setMark(s, p, "love");
+        learn(s, me, step, { t: "placed", mark: "love", on: p });
+      }
+      return done();
+    }
+    case "instigator": {
+      if (players.length !== 1 || centers.length) fail("Pick one player.");
+      setMark(s, players[0], "traitor");
+      learn(s, me, step, { t: "placed", mark: "traitor", on: players[0] });
+      return done();
+    }
+    case "priest": {
+      if (players.length !== 1 || centers.length) fail("Pick one other player.");
+      setMark(s, players[0], "clarity");
+      learn(s, me, step, { t: "placed", mark: "clarity", on: players[0] });
+      return done();
+    }
+    case "assassin":
+    case "apprenticeassassin": {
+      if (players.length !== 1 || centers.length) fail("Pick one player to mark.");
+      setMark(s, players[0], "assassin");
+      s.secret.assassinMarkPlaced = true;
+      learn(s, me, step, { t: "placed", mark: "assassin", on: players[0] });
+      return done();
+    }
+    case "marksman": {
+      if (players.length > 1 || markPicks.length > 1 || centers.length) fail("Pick one player's card and/or one player's Mark.");
+      if (!players.length && !markPicks.length) fail("Pick a card, a Mark, or skip.");
+      if (players.length && markPicks.length && players[0] === markPicks[0]) fail("Pick two different players for the card and the Mark.");
+      if (players.length) learn(s, me, step, { t: "saw", at: { player: players[0] }, role: s.secret.cards[players[0]] });
+      if (markPicks.length) learn(s, me, step, { t: "markof", id: markPicks[0], mark: markOf(s, markPicks[0]) });
+      return done();
+    }
+    case "pickpocket": {
+      if (players.length !== 1 || centers.length) fail("Pick one other player.");
+      swapMarks(s, me, players[0]);
+      learn(s, me, step, { t: "markswap", a: me, b: players[0] });
+      learn(s, me, step, { t: "mark", mark: markOf(s, me) });
+      return done();
+    }
+    case "gremlin": {
+      if (players.length !== 2 || centers.length || !pick.what) fail("Choose cards or Marks, then two players.");
+      if (pick.what === "cards") {
+        swap(s, { player: players[0] }, { player: players[1] });
+        learn(s, me, step, { t: "swapped", a: { player: players[0] }, b: { player: players[1] } });
+      } else {
+        swapMarks(s, players[0], players[1]);
+        learn(s, me, step, { t: "markswap", a: players[0], b: players[1] });
+      }
+      return done();
+    }
   }
+}
+
+/** The pack's choice: one Vampire speaks for all of them. */
+function placeVampire(s: OnuwState, target: string): void {
+  const step = currentStep(s)!;
+  const pack = vampGroup(s);
+  setMark(s, target, "vampire");
+  s.secret.vampireTarget = target;
+  for (const id of pack) learn(s, id, step, { t: "placed", mark: "vampire", on: target });
+  finish1(s, pack);
 }
 
 /** The Village Idiot: every other player's card moves one place along the list (in join order), wrapping. */
@@ -524,36 +746,84 @@ function shift(s: OnuwState, me: string, dir: "up" | "down"): void {
   });
 }
 
-function copy(s: OnuwState, me: string, target: string): void {
-  const role = s.secret.cards[target];
+function copyDoppel(s: OnuwState, me: string, target: string): void {
+  let role = s.secret.cards[target];
+  let passive = false;
+  // Copying the Copycat just echoes whatever the Copycat became; there's nothing to wake for.
+  if (role === "copycat") {
+    role = s.secret.copycatCopy ?? "villager";
+    passive = true;
+  }
   s.secret.doppelCopy = role;
+  s.secret.doppelPassive = passive;
   learn(s, me, "doppelganger", { t: "copied", from: target, role });
-  if (!ACTIVE_COPIES.includes(role)) s.secret.done.push(me);
+  if (passive || !ACTIVE_COPIES.includes(role)) s.secret.done.push(me);
 }
+
+function copyCenter(s: OnuwState, me: string, center: number): void {
+  const role = s.secret.center[center];
+  s.secret.copycatCopy = role;
+  learn(s, me, "copycat", { t: "saw", at: { center }, role });
+  learn(s, me, "copycat", { t: "became", role });
+}
+
+const pickOne = <T,>(xs: T[], rng: Rng): T => xs[Math.floor(rng() * xs.length)];
 
 /** Time's up for the current step: anything mandatory that wasn't done is done at random. */
 function finishStep(s: OnuwState, rng: Rng): void {
   const step = currentStep(s);
   if (!step) return;
+  const auto = (id: string, note: string) => learn(s, id, step, { t: "auto", note });
   for (const id of actorsFor(s, step)) {
     if (s.secret.done.includes(id)) continue;
-    const prompt = promptFor(s, id);
+    let prompt = promptFor(s, id);
     if (!prompt) continue;
     if (prompt.kind === "doppelganger") {
-      const others = s.players.filter((p) => p.id !== id);
-      const target = others[Math.floor(rng() * others.length)].id;
-      learn(s, id, step, { t: "auto", note: "Time ran out, so the phone picked for you." });
-      copy(s, id, target);
+      auto(id, "Time ran out, so the phone picked for you.");
+      copyDoppel(s, id, pickOne(s.players.filter((p) => p.id !== id), rng).id);
+      prompt = promptFor(s, id);
     }
-    const again = promptFor(s, id);
-    if (again?.kind === "drunk") {
+    if (!prompt) {
+      s.secret.done.push(id);
+      continue;
+    }
+    const k = prompt.kind;
+    const others = s.players.map((p) => p.id).filter((x) => x !== id);
+    const all = s.players.map((p) => p.id);
+    if (k === "drunk") {
       const c = Math.floor(rng() * CENTER_CARDS);
       swap(s, { player: id }, { center: c });
       learn(s, id, step, { t: "swapped", a: { player: id }, b: { center: c } });
-      learn(s, id, step, { t: "auto", note: "Time ran out, so the phone picked a center card for you." });
-    } else if (again) {
-      learn(s, id, step, { t: "auto", note: "Time ran out — you did nothing." });
+      auto(id, "Time ran out, so the phone picked a center card for you.");
+    } else if (k === "copycat") {
+      copyCenter(s, id, Math.floor(rng() * CENTER_CARDS));
+      auto(id, "Time ran out, so the phone picked a center card for you.");
+    } else if (k === "vampire") {
+      const targets = vampTargets(s);
+      for (const v of vampGroup(s)) auto(v, "Time ran out, so the phone picked who to mark.");
+      placeVampire(s, pickOne(targets, rng));
+      continue;
+    } else if (k === "count") {
+      const targets = fearTargets(s);
+      if (targets.length) {
+        setMark(s, pickOne(targets, rng), "fear");
+        auto(id, "Time ran out, so the phone picked who to frighten.");
+      }
+    } else if (k === "diseased") {
+      const t = neighbour(s, id, rng() < 0.5 ? "up" : "down");
+      setMark(s, t, "disease");
+      learn(s, id, step, { t: "placed", mark: "disease", on: t });
+      auto(id, "Time ran out, so the phone picked a side for you.");
+    } else if (k === "assassin" || k === "apprenticeassassin") {
+      const t = pickOne(all, rng);
+      setMark(s, t, "assassin");
+      s.secret.assassinMarkPlaced = true;
+      learn(s, id, step, { t: "placed", mark: "assassin", on: t });
+      auto(id, "Time ran out, so the phone picked who to mark.");
+    } else {
+      auto(id, "Time ran out — you did nothing.");
     }
+    void others;
     s.secret.done.push(id);
   }
 }
@@ -596,96 +866,89 @@ export function onuwTick(s: OnuwState, now: number, rng: Rng): boolean {
 
 // ---- the result -----------------------------------------------------------------------------------
 
-export function finalRoleOf(card: OnuwRole, doppelCopy: OnuwRole | null): OnuwRole {
-  return card === "doppelganger" && doppelCopy ? doppelCopy : card;
+/** What a card means at the end: a Doppelgänger or Copycat card is whatever it copied. */
+export function finalRoleOf(card: OnuwRole, doppelCopy: OnuwRole | null, copycatCopy: OnuwRole | null = null): OnuwRole {
+  if (card === "doppelganger" && doppelCopy) return doppelCopy;
+  if (card === "copycat" && copycatCopy) return copycatCopy;
+  return card;
 }
 
 export function teamOf(role: OnuwRole): OnuwTeam {
   return ROLE_BY_KEY[role].team;
 }
 
-/** Who dies, given the final roles and the votes. Exported for the tests. */
+/** Who dies, given the final roles and the votes (no Marks). Exported for the tests. */
 export function resolveDeaths(ids: string[], votes: Record<string, string>, finalRole: Record<string, OnuwRole>): string[] {
-  const tally: Record<string, number> = {};
-  for (const id of ids) if (votes[id]) tally[votes[id]] = (tally[votes[id]] ?? 0) + 1;
-  const max = Math.max(0, ...Object.values(tally));
-  // The Bodyguard's vote protects its target from every kind of death.
-  const shielded = new Set(ids.filter((id) => finalRole[id] === "bodyguard" && votes[id]).map((id) => votes[id]));
-  // Nobody dies unless someone has more than one vote; a tie at the top kills everyone in the tie.
-  const dead = max >= 2 ? ids.filter((id) => tally[id] === max && !shielded.has(id)) : [];
-  // The Hunter takes their vote down with them — and a Hunter shot by a Hunter shoots too.
-  for (let i = 0; i < dead.length; i++) {
-    const id = dead[i];
-    const target = votes[id];
-    if (finalRole[id] === "hunter" && target && !dead.includes(target) && !shielded.has(target)) dead.push(target);
-  }
-  return dead;
+  return resolveOutcome({ ids, role: finalRole, marks: {}, votes, assassinMarkPlaced: false, aaFoundAssassin: {} }).deaths;
 }
 
-export function resolveWinners(
-  ids: string[],
-  dead: string[],
-  finalRole: Record<string, OnuwRole>,
-): { village: boolean; werewolf: boolean; tanner: boolean } {
-  const wolves = ids.filter((id) => isWolf(finalRole[id]));
-  const wolfDied = dead.some((id) => isWolf(finalRole[id]));
-  const tannerDied = dead.some((id) => finalRole[id] === "tanner");
-  if (wolves.length > 0) return { village: wolfDied, werewolf: !wolfDied && !tannerDied, tanner: tannerDied };
-  // No Werewolf among the players: the village needs nobody to die; a Minion needs somebody else to.
-  const minions = ids.filter((id) => finalRole[id] === "minion");
-  const otherDied = dead.some((id) => finalRole[id] !== "minion");
-  return { village: dead.length === 0, werewolf: minions.length > 0 && otherDied && !tannerDied, tanner: tannerDied };
-}
+export { resolveWinners };
 
 function finish(s: OnuwState, now: number): void {
   const sec = s.secret;
   const ids = s.players.map((p) => p.id);
   const finalRole: Record<string, OnuwRole> = {};
-  for (const id of ids) finalRole[id] = finalRoleOf(sec.cards[id], sec.doppelCopy);
-  const deaths = resolveDeaths(ids, sec.votes, finalRole);
-  const winners = resolveWinners(ids, deaths, finalRole);
+  for (const id of ids) finalRole[id] = finalRoleOf(sec.cards[id], sec.doppelCopy, sec.copycatCopy ?? null);
+  const marks = sec.marks ?? {};
+  const o = resolveOutcome({
+    ids,
+    role: finalRole,
+    marks,
+    votes: sec.votes,
+    assassinMarkPlaced: sec.assassinMarkPlaced ?? false,
+    aaFoundAssassin: sec.aaFound ?? {},
+  });
   const tally: Record<string, number> = {};
   for (const id of ids) if (sec.votes[id]) tally[sec.votes[id]] = (tally[sec.votes[id]] ?? 0) + 1;
 
-  const players: ResultPlayer[] = s.players.map((p) => {
-    const role = finalRole[p.id];
-    const team = teamOf(role);
-    const dead = deaths.includes(p.id);
-    return {
-      id: p.id,
-      startRole: sec.dealt[p.id],
-      finalCard: sec.cards[p.id],
-      finalRole: role,
-      team,
-      votedFor: sec.votes[p.id] ?? null,
-      votes: tally[p.id] ?? 0,
-      dead,
-      won: team === "tanner" ? dead : team === "werewolf" ? winners.werewolf : winners.village,
-      learned: sec.learned[p.id] ?? [],
-    };
-  });
+  const players: ResultPlayer[] = s.players.map((p) => ({
+    id: p.id,
+    startRole: sec.dealt[p.id],
+    finalCard: sec.cards[p.id],
+    finalRole: o.role[p.id],
+    mark: marks[p.id] ?? "clarity",
+    team: o.team[p.id],
+    votedFor: sec.votes[p.id] ?? null,
+    votes: tally[p.id] ?? 0,
+    dead: o.deaths.includes(p.id),
+    won: o.won[p.id],
+    learned: sec.learned[p.id] ?? [],
+  }));
 
   const name = (id: string) => s.players.find((p) => p.id === id)?.name ?? id;
+  const names = (xs: string[]) => xs.map(name).join(" and ");
   const summary: string[] = [];
-  if (!deaths.length) summary.push("Nobody died.");
-  const topVotes = Math.max(0, ...players.map((x) => x.votes));
-  for (const id of deaths) {
+  if (o.epic) summary.push("Epic Battle! Vampires, Werewolves and villagers were all in play, so at least two players had to die.");
+  if (!o.deaths.length) summary.push("Nobody died.");
+  for (const id of o.deaths) {
     const r = players.find((p) => p.id === id)!;
-    const hunter = players.find((h) => h.dead && h.finalRole === "hunter" && h.votedFor === id && h.id !== id);
-    const how = r.votes === topVotes && topVotes >= 2 ? `${r.votes} votes` : `shot by the Hunter, ${name(hunter?.id ?? "")}`;
+    const shot = o.notes.find((n) => n.kind === "hunter" && n.ids[1] === id);
+    const heart = o.notes.find((n) => n.kind === "love" && n.ids.includes(id));
+    const how = shot ? `shot by the Hunter, ${name(shot.ids[0])}` : heart ? "died with their lover" : `${r.votes} vote${r.votes === 1 ? "" : "s"}`;
     summary.push(`${name(id)} died (${how}) — the ${ROLE_BY_KEY[r.finalRole].name}.`);
   }
-  if (winners.village) summary.push("The village team wins!");
-  if (winners.werewolf) summary.push("The werewolf team wins!");
-  if (winners.tanner) summary.push("The Tanner wins!");
-  if (!winners.village && !winners.werewolf && !winners.tanner) summary.push("Nobody wins.");
+  for (const n of o.notes) {
+    if (n.kind === "master") summary.push(`${names(n.ids)} (the Master) was protected by a Vampire's vote.`);
+    else if (n.kind === "shield") summary.push(`${names(n.ids)} would have died, but was protected.`);
+    else if (n.kind === "cursed") summary.push(`${names(n.ids)} was Cursed, and a Werewolf voted for them: they're a Werewolf now.`);
+    else if (n.kind === "disease") summary.push(`${names(n.ids)} voted for a player with the Mark of Disease, so can't win.`);
+  }
+  const w = o.winners;
+  if (w.village) summary.push("The village team wins!");
+  if (w.werewolf) summary.push("The werewolf team wins!");
+  if (w.vampire) summary.push("The vampire team wins!");
+  if (w.tanner) summary.push("The Tanner wins!");
+  if (w.assassin) summary.push("The Assassin wins!");
+  if (!w.village && !w.werewolf && !w.vampire && !w.tanner && !w.assassin) summary.push("Nobody wins.");
 
   s.result = {
     players,
     center: sec.centerStart.map((start, i) => ({ start, final: sec.center[i] })),
     doppelCopy: sec.doppelCopy,
-    deaths,
-    winners,
+    copycatCopy: sec.copycatCopy ?? null,
+    deaths: o.deaths,
+    winners: w,
+    epic: o.epic,
     summary,
   };
   s.phase = "RESULT";

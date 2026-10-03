@@ -1,13 +1,31 @@
 import { useState, type ReactNode } from "react";
-import { ONUW_ROLES, STEP_TEXT, nightSteps, type OnuwTeam } from "../../../shared/src/onuw/roles";
+import { DUSK_STEPS, ONUW_ROLES, STEP_TEXT, nightSteps, type OnuwTeam } from "../../../shared/src/onuw/roles";
 import { Section } from "../ui";
-import { RoleChip, RoleFace, TEAM_NAME, WerewolfNav } from "./ui";
+import { MARK_MEANING, MARK_NAME, RoleChip, RoleFace, TEAM_NAME, WerewolfNav } from "./ui";
 
 function Page({ children }: { children: ReactNode }) {
   return <main className="mx-auto max-w-2xl p-4 space-y-4 pb-16">{children}</main>;
 }
 
-const ALL_STEPS = nightSteps(Object.fromEntries(ONUW_ROLES.map((r) => [r.key, r.max])) as never);
+const EVERY_STEP = nightSteps(Object.fromEntries(ONUW_ROLES.map((r) => [r.key, r.max])) as never).filter((s) => !s.startsWith("after:"));
+const DUSK_LIST = EVERY_STEP.filter((s) => DUSK_STEPS.has(s) || s === "marks" || s === "lovers");
+const ALL_STEPS = EVERY_STEP.filter((s) => !DUSK_LIST.includes(s));
+
+function StepList({ steps }: { steps: typeof ALL_STEPS }) {
+  return (
+    <ol className="space-y-3">
+      {steps.map((s, i) => (
+        <li key={s} className="flex gap-3">
+          <span className="shrink-0 w-6 text-right font-black text-zinc-500">{i + 1}</span>
+          <div>
+            <div className="font-bold">{STEP_TEXT[s].title}</div>
+            <div className="text-sm text-zinc-300">{STEP_TEXT[s].wake}</div>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 export function WerewolfHowToPlay() {
   return (
@@ -71,18 +89,48 @@ export function WerewolfHowToPlay() {
           Every role in the deck is called, even if its card is in the center, and each step takes the same time either way.
           A short night would give away which roles are missing.
         </p>
-        <ol className="space-y-3">
-          {ALL_STEPS.map((s, i) => (
-            <li key={s} className="flex gap-3">
-              <span className="shrink-0 w-6 text-right font-black text-zinc-500">{i + 1}</span>
-              <div>
-                <div className="font-bold">{STEP_TEXT[s].title}</div>
-                <div className="text-sm text-zinc-300">{STEP_TEXT[s].wake}</div>
-              </div>
+        <StepList steps={ALL_STEPS} />
+        <p className="mt-3 text-sm text-zinc-400">Villagers, the Hunter, the Tanner, the Bodyguard, the Dream Wolf, the Prince and the Cursed sleep all night. A Doppelgänger who copied a role with a later wake-up wakes just after it.</p>
+      </Section>
+
+      <Section title="Vampire: dusk, Marks and the Epic Battle">
+        <p className="text-sm text-zinc-300">
+          Add the Vampire cards from the lobby (or pick the Vampire deck) and the game gets a <b>Dusk</b> before the night. At
+          dusk the Copycat, Vampires, Diseased, Cupid, Instigator, Priest and Assassins act. Their powers are <b>Marks</b>: tokens that
+          change a player's team or win condition without touching their card.
+        </p>
+        <ul className="mt-3 space-y-2 list-disc pl-5 text-sm">
+          <li>
+            Everyone starts with the Mark of Clarity (no effect). A player has exactly one Mark: getting a new one replaces the old. After
+            dusk, everyone secretly looks at their own Mark. Swapping cards never moves Marks.
+          </li>
+          {(["vampire", "fear", "disease", "love", "traitor", "assassin", "bat"] as const).map((m) => (
+            <li key={m}>
+              <b>Mark of {MARK_NAME[m].replace(/^the /, "the ")}</b>: {MARK_MEANING[m]}
             </li>
           ))}
-        </ol>
-        <p className="mt-3 text-sm text-zinc-400">Villagers, the Hunter and the Tanner sleep all night.</p>
+          <li>
+            <b>Vampires</b> win if no Vampire dies. If Werewolves are also in play, they need a Werewolf to die too. The Master can't be
+            killed while another Vampire votes for him; the player with the second most votes dies instead. Renfield, on the Vampires' side,
+            wins when no Vampire dies, even if he does.
+          </li>
+          <li>
+            <b>Epic Battle.</b> When Vampires, Werewolves and villagers are all in play, at least two players must die: the one with the most votes and
+            the one with the second most (or every player tied for the most). Villagers need a Vampire and a Werewolf to die. Vampires need a
+            Werewolf to die and no Vampire. Werewolves need a Vampire to die and no Werewolf.
+          </li>
+          <li>
+            <b>Assassins</b> win on their own: the Assassin wins if the player with the Mark of the Assassin dies, whoever else wins. If no Mark
+            was placed, an Assassin is just a villager.
+          </li>
+        </ul>
+        <h3 className="mt-4 text-xs uppercase tracking-widest text-zinc-400">Dusk and the Marks, in order</h3>
+        <div className="mt-3">
+          <StepList steps={DUSK_LIST} />
+        </div>
+        <p className="mt-3 text-sm text-zinc-400">
+          A player with the Mark of Fear skips their night action, but still does any dusk action, and still looks at their Mark.
+        </p>
       </Section>
 
       <Section title="Voting">
@@ -114,6 +162,13 @@ export function WerewolfHowToPlay() {
           <li>The Village Idiot moves cards along the player list in the order players joined (the order shown on the host screen), skipping themself. Up and Down wrap round.</li>
           <li>The Revealer's flip is public from the start of the day. It happens last, after the Insomniac, so it shows the card as it ended the night.</li>
           <li>The Beholder sees the Seer by the card the Seer was dealt, at the Beholder's turn, before the Robber and Troublemaker act.</li>
+          <li>The Beholder wakes late (after the Insomniac) and sees whoever holds the Seer card at that moment. The Revealer wakes after that.</li>
+          <li>Roles act by the card they were dealt. The Copycat acts at the copied role's step, together with the real holders. If the Copycat's card is moved, whoever holds it is the role the Copycat saw.</li>
+          <li>Any one Vampire speaks for the pack: the first to confirm picks who gets the Mark of the Vampire. If the time runs out, the phone picks.</li>
+          <li>The Cursed turns into a Werewolf only if a Werewolf, Mystic Wolf or Dream Wolf votes for them, and only if they don't hold the Mark of the Vampire.</li>
+          <li>The Prince and the Bodyguard's target can't die from the vote or the Hunter. Lovers still die together.</li>
+          <li>The Apprentice Assassin wins if the player who holds the Assassin card at the end dies; if there was no Assassin at dusk and they placed the Mark themselves, they win if the player with the Mark dies.</li>
+          <li>The Doppelgänger who copies the Copycat just becomes what the Copycat saw, and does nothing else.</li>
           <li>The Doppelgänger who copies the Minion sees the Werewolves at the Minion's step, together with the real Minion.</li>
           <li>If you don't pick before your step's time runs out, the phone skips your optional action. The Drunk's swap and the Doppelgänger's copy aren't optional, so the phone picks at random for you.</li>
         </ul>
@@ -126,7 +181,9 @@ const FILTERS: Array<{ key: OnuwTeam | "all"; label: string }> = [
   { key: "all", label: "All" },
   { key: "village", label: "Village" },
   { key: "werewolf", label: "Werewolf" },
+  { key: "vampire", label: "Vampire" },
   { key: "tanner", label: "Tanner" },
+  { key: "assassin", label: "Assassin" },
 ];
 
 export function WerewolfRoles() {
@@ -137,8 +194,8 @@ export function WerewolfRoles() {
       <WerewolfNav page="roles" />
       <h1 className="text-3xl font-black">Roles</h1>
       <p className="text-zinc-300">
-        The 12 base-game roles and 7 more from the expansions, in the order they wake up. The extra roles are what let the game
-        run up to 30 players. Tap a team to filter.
+        The 12 base-game roles, 9 more from the Daybreak and bonus packs, and the 14 from the Vampire box,
+        in the order they wake up. The extra roles are what let the game run up to 30 players. Tap a team to filter.
       </p>
       <div className="flex gap-2 flex-wrap">
         {FILTERS.map((f) => (
@@ -160,7 +217,9 @@ export function WerewolfRoles() {
               <div className="flex gap-2 flex-wrap text-xs text-zinc-400">
                 <span>{TEAM_NAME[r.team]} team</span>
                 <span>·</span>
-                <span>{r.wakeOrder ? `Wakes ${ordinal(r.wakeOrder)}` : "Doesn't wake"}</span>
+                <span>{r.wakeOrder ? `Night step ${r.wakeOrder}` : "Doesn't wake"}</span>
+                <span>·</span>
+                <span>{r.set === "base" ? "Base game" : r.set === "extra" ? "Daybreak / bonus" : "Vampire"}</span>
                 <span>·</span>
                 <span>
                   {r.max} in the box
@@ -187,8 +246,4 @@ export function WerewolfRoles() {
       </Section>
     </Page>
   );
-}
-
-function ordinal(n: number): string {
-  return ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "last"][n] ?? `#${n}`;
 }

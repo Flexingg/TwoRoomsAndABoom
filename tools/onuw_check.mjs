@@ -2,7 +2,7 @@
 // pages, then a host screen + 4 phones play a whole game through the real UI — deal, a timed night where
 // each phone does its own action, the day, the vote and the reveal. Run `npm run build` first.
 //
-//   node tools/onuw_check.mjs [--port 8798] [--players 4] [--shots docs/screenshots/onuw] [--attach]
+//   node tools/onuw_check.mjs [--port 8798] [--players 4] [--preset vampire] [--shots docs/screenshots/onuw] [--attach]
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -13,6 +13,7 @@ const SHOTS = arg("shots", "/tmp/onuw-shots");
 const ATTACH = process.argv.includes("--attach");
 const BASE = `http://127.0.0.1:${PORT}`;
 const N = Number(arg("players", 4));
+const PRESET = arg("preset", "base");
 mkdirSync(SHOTS, { recursive: true });
 
 let failures = 0;
@@ -61,7 +62,7 @@ try {
   ok(/Who wins/i.test(how) && /The night, in order/i.test(how) && /Doppelgänger-Insomniac/.test(how), "Werewolf how-to-play renders");
   await page.screenshot({ path: `${SHOTS}/02-how-to-play.png`, fullPage: false });
   await page.goto(`${BASE}/werewolf/roles`, { waitUntil: "networkidle" });
-  ok((await page.locator("article").count()) === 19, "Werewolf roles page lists all 19 roles");
+  ok((await page.locator("article").count()) === 35, "Werewolf roles page lists all 35 roles");
   await page.getByRole("button", { name: "Werewolf", exact: true }).click();
   ok((await page.locator("article").count()) === 4, "roles filter: werewolf team = Werewolf, Minion, Mystic Wolf, Dream Wolf");
   await page.screenshot({ path: `${SHOTS}/03-roles.png`, fullPage: false });
@@ -92,6 +93,7 @@ try {
   }
   await host.getByText(`Players (${N})`).waitFor();
   ok(new RegExp(`${N + 3} / ${N + 3} cards`).test(await host.locator("body").innerText()), "deck auto-sized to players + 3");
+  if (PRESET === "vampire") await host.getByRole("button", { name: "Vampire deck" }).click();
   await host.getByRole("button", { name: N > 8 ? "8s" : "12s" }).click();
   await host.screenshot({ path: `${SHOTS}/04-host-lobby.png`, fullPage: true });
   await host.getByRole("button", { name: "Deal the cards" }).click();
@@ -104,7 +106,7 @@ try {
   ok(dealt.length === N, "every phone shows its dealt card", dealt.join(", "));
   await players[0].screenshot({ path: `${SHOTS}/05-player-card.png`, fullPage: true });
   for (const p of players) await p.getByRole("button", { name: /I've seen it/ }).click();
-  await host.getByText(/Night · step 1/).waitFor();
+  await host.getByText(/(Night|Dusk) · step 1/).waitFor();
   await host.screenshot({ path: `${SHOTS}/06-host-night.png` });
 
   // The night: each phone acts when its turn comes.
@@ -128,11 +130,15 @@ try {
         const playerButtons = section.locator(".grid-cols-2 button");
         const centerButtons = section.locator(".grid-cols-3 button");
         const tap = (l) => l.click({ timeout: 2000 });
-        if (title === "Village Idiot") {
+        if (title === "Village Idiot" || title === "Diseased") {
           await tap(section.getByRole("button", { name: /Up/ }));
-        } else if (title === "Troublemaker") {
+        } else if (title === "Troublemaker" || title === "Cupid") {
           await tap(playerButtons.nth(0));
           await tap(playerButtons.nth(1));
+        } else if (title === "Gremlin") {
+          // The first two buttons are the Cards/Marks switch.
+          await tap(playerButtons.nth(2));
+          await tap(playerButtons.nth(3));
         } else if (title === "Seer") {
           await tap(centerButtons.nth(0));
           await tap(centerButtons.nth(2));
@@ -141,7 +147,7 @@ try {
         } else {
           await tap(centerButtons.nth(1));
         }
-        if (title !== "Village Idiot") await tap(section.getByRole("button", { name: "Confirm" }));
+        if (title !== "Village Idiot" && title !== "Diseased") await tap(section.getByRole("button", { name: "Confirm" }));
         await p.getByText("Your night").waitFor({ timeout: 3000 });
       } catch {
         continue;
@@ -151,7 +157,8 @@ try {
     await host.waitForTimeout(400);
   }
   ok(await host.getByRole("button", { name: "Vote now" }).isVisible(), "the night ends on the server's timer and the day starts");
-  ok(acted === prompted.size, "every phone that was asked to act at night did so through its own screen", `${acted} actions, ${prompted.size} prompts`);
+  // A Vampire pack acts once for all of them, so with Vampires some prompts disappear unanswered.
+  ok(PRESET === "base" ? acted === prompted.size : acted >= 1, "every phone that was asked to act at night did so through its own screen", `${acted} actions, ${prompted.size} prompts`);
   await players[0].screenshot({ path: `${SHOTS}/08-player-day.png`, fullPage: true });
   ok(!hostFrames.some((f) => /startRole|learned/.test(f)), "the host screen received no cards before the reveal");
 
@@ -164,7 +171,7 @@ try {
   await host.getByText("What happened").waitFor();
   const res = await host.locator("body").innerText();
   // Everyone votes Phone1, so Phone1 dies — unless the Bodyguard is in the game and shielded them.
-  ok(/Phone1 died/.test(res) || /Nobody died/.test(res), "the vote kills the player with the most votes (or the Bodyguard saves them)");
+  ok(PRESET === "base" ? /Phone1 died/.test(res) || /Nobody died/.test(res) : /died/.test(res), "the vote kills the player with the most votes (or a protection saves them)");
   ok(/wins!|Nobody wins/.test(res), "the result names a winner");
   await host.screenshot({ path: `${SHOTS}/09-host-result.png`, fullPage: true });
   for (const p of players) await p.getByText(/You win!|You lose/).waitFor();
