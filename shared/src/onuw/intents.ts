@@ -6,7 +6,7 @@ import type { OnuwMessage } from "./protocol.js";
 import { ROLE_KEYS } from "./roles.js";
 
 const id = z.string().min(1).max(16);
-const count = z.number().int().min(0).max(3);
+const count = z.number().int().min(0).max(12);
 const deck = z.object(Object.fromEntries(ROLE_KEYS.map((k) => [k, count.optional()]))).strict();
 
 const action = z.discriminatedUnion("type", [
@@ -35,6 +35,7 @@ const action = z.discriminatedUnion("type", [
         .object({
           players: z.array(id).max(2).optional(),
           centers: z.array(z.number().int().min(0).max(2)).max(2).optional(),
+          dir: z.enum(["up", "down"]).optional(),
           skip: z.boolean().optional(),
         })
         .strict(),

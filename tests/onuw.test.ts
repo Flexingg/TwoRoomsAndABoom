@@ -14,7 +14,7 @@ import {
 } from "../shared/src/onuw/engine.js";
 import { parseOnuw } from "../shared/src/onuw/intents.js";
 import type { NightPick, OnuwAction, OnuwPlayerView, OnuwViewer } from "../shared/src/onuw/protocol.js";
-import { deckSize, nightSteps, recommendedDeck, ONUW_ROLES, ROLE_KEYS, type OnuwRole, type StepKey } from "../shared/src/onuw/roles.js";
+import { deckSize, MAX_PLAYERS, nightSteps, recommendedDeck, ONUW_ROLES, ROLE_KEYS, type OnuwRole, type StepKey } from "../shared/src/onuw/roles.js";
 import { seededRng } from "../shared/src/rng.js";
 
 const HOST: OnuwViewer = { kind: "host" };
@@ -60,19 +60,45 @@ function vote(s: OnuwState, ids: string[], targets: number[]) {
 }
 
 describe("ONUW deck", () => {
-  it("the recommended deck is always players + 3 cards, never one lone Mason, never over the box", () => {
-    for (let n = 3; n <= 10; n++) {
+  it("the recommended deck is always players + 3 cards, never one lone Mason, never over the box — from 3 to 30 players", () => {
+    for (let n = 3; n <= MAX_PLAYERS; n++) {
       const d = recommendedDeck(n);
       expect(deckSize(d), `${n} players`).toBe(n + 3);
       expect(d.mason === 0 || d.mason === 2, `${n} players: masons`).toBe(true);
-      for (const r of ONUW_ROLES) expect(d[r.key]).toBeLessThanOrEqual(r.max);
-      expect(d.werewolf).toBe(2);
+      for (const r of ONUW_ROLES) expect(d[r.key], `${n} players: ${r.key}`).toBeLessThanOrEqual(r.max);
+      expect(d.werewolf + d.mysticwolf + d.dreamwolf, `${n} players: wolves`).toBeGreaterThanOrEqual(2);
     }
+    // The small game is still the rulebook's: two Werewolves, no expansion cards.
+    for (let n = 3; n <= 10; n++) {
+      const d = recommendedDeck(n);
+      expect(d.werewolf).toBe(2);
+      expect(d.mysticwolf + d.dreamwolf + d.apprentice + d.idiot + d.revealer + d.bodyguard + d.beholder).toBe(0);
+    }
+  });
+
+  it("a 24-player table gets a real deck: 27 cards, several wolves, the expansion roles, and every card in the box limit", () => {
+    const d = recommendedDeck(24);
+    expect(deckSize(d)).toBe(27);
+    expect(d.werewolf + d.mysticwolf + d.dreamwolf).toBeGreaterThanOrEqual(4);
+    expect(d.werewolf + d.mysticwolf + d.dreamwolf).toBeLessThanOrEqual(8);
+    expect(d.mysticwolf + d.dreamwolf + d.apprentice + d.idiot + d.revealer + d.bodyguard + d.beholder).toBeGreaterThanOrEqual(5);
+  });
+
+  it("fills a 30-player game (the cap) and refuses a 31st", () => {
+    const s = createOnuwGame("BIG", rng, 0);
+    for (let i = 0; i < 30; i++) addOnuwPlayer(s, `P${i}`, rng);
+    expect(deckSize(s.options.deck)).toBe(33);
+    expect(() => addOnuwPlayer(s, "one too many", rng)).toThrow(/full \(30 players\)/);
+    onuwDispatch(s, HOST, { type: "host:start" }, 0, rng);
+    expect(s.phase).toBe("VIEW");
   });
 
   it("every role in the deck gets its night step, in the rulebook's order — even if it ends up in the center", () => {
     const d = Object.fromEntries(ONUW_ROLES.map((r) => [r.key, r.max])) as Record<OnuwRole, number>;
-    expect(nightSteps(d)).toEqual(["doppelganger", "werewolf", "minion", "mason", "seer", "robber", "troublemaker", "drunk", "insomniac", "doppelInsomniac"]);
+    expect(nightSteps(d)).toEqual([
+      "doppelganger", "werewolf", "mysticwolf", "minion", "mason", "seer", "apprentice", "beholder",
+      "robber", "troublemaker", "idiot", "drunk", "insomniac", "doppelInsomniac", "revealer",
+    ]);
   });
 
   it("the deck auto-follows the player count until the host edits it", () => {
@@ -205,6 +231,143 @@ describe("ONUW night", () => {
   });
 });
 
+describe("ONUW expansion roles", () => {
+  it("the Mystic Wolf wakes with the Werewolves, then looks at one player's card", () => {
+    const { s, ids } = rigged(["werewolf", "mysticwolf", "seer", "villager"], ["villager", "robber", "minion"]);
+    runTo(s, "werewolf");
+    expect(view(s, ids[0]).you.learned[0].item).toEqual({ t: "allies", role: "werewolf", ids: [ids[1]] });
+    expect(view(s, ids[1]).you.learned[0].item).toEqual({ t: "allies", role: "werewolf", ids: [ids[0]] });
+    runTo(s, "mysticwolf");
+    expect(view(s, ids[1]).you.prompt).toEqual({ kind: "mysticwolf" });
+    night(s, ids[1], { players: [ids[2]] });
+    expect(view(s, ids[1]).you.learned.at(-1)!.item).toEqual({ t: "saw", at: { player: ids[2] }, role: "seer" });
+  });
+
+  it("the Dream Wolf never wakes and isn't seen by the Werewolves — but the Minion sees it", () => {
+    const { s, ids } = rigged(["werewolf", "dreamwolf", "minion", "villager"], ["villager", "seer", "robber"]);
+    runTo(s, "werewolf");
+    expect(view(s, ids[0]).you.prompt).toEqual({ kind: "wolfCenter" });
+    expect(JSON.stringify(view(s, ids[0]).you.learned)).not.toContain(ids[1]);
+    runTo(s, "minion");
+    expect(view(s, ids[2]).you.learned[0].item).toEqual({ t: "allies", role: "werewolf", ids: [ids[0], ids[1]] });
+    expect(view(s, ids[1]).you.learned).toEqual([]);
+  });
+
+  it("a Dream Wolf dying counts as a Werewolf dying", () => {
+    const r = Object.fromEntries(["villager", "dreamwolf", "seer"].map((x, i) => [`p${i}`, x])) as Record<string, OnuwRole>;
+    expect(resolveWinners(["p0", "p1", "p2"], ["p1"], r)).toEqual({ village: true, werewolf: false, tanner: false });
+    expect(resolveWinners(["p0", "p1", "p2"], ["p0"], r)).toEqual({ village: false, werewolf: true, tanner: false });
+  });
+
+  it("the Apprentice Seer peeks at one center card; the Beholder learns who the Seer is, or that nobody is", () => {
+    const a = rigged(["apprentice", "beholder", "seer", "werewolf"], ["villager", "robber", "minion"]);
+    runTo(a.s, "apprentice");
+    expect(() => night(a.s, a.ids[0], { centers: [0, 1] })).toThrow(/one center card/);
+    night(a.s, a.ids[0], { centers: [2] });
+    expect(view(a.s, a.ids[0]).you.learned.at(-1)!.item).toEqual({ t: "saw", at: { center: 2 }, role: "minion" });
+    runTo(a.s, "beholder");
+    expect(view(a.s, a.ids[1]).you.learned[0].item).toEqual({ t: "allies", role: "seer", ids: [a.ids[2]] });
+    const b = rigged(["beholder", "werewolf", "villager"], ["seer", "robber", "minion"]);
+    runTo(b.s, "beholder");
+    expect(view(b.s, b.ids[0]).you.learned[0].item).toEqual({ t: "allies", role: "seer", ids: [] });
+  });
+
+  it("the Village Idiot shifts every other card along the list and keeps their own; up and down are opposites", () => {
+    const hands: OnuwRole[] = ["werewolf", "idiot", "seer", "robber", "villager"];
+    const up = rigged(hands, ["villager", "villager", "villager"]);
+    runTo(up.s, "idiot");
+    night(up.s, up.ids[1], { dir: "up" });
+    const cards = (g: ReturnType<typeof rigged>) => g.ids.map((id) => g.s.secret.cards[id]);
+    // Others are p0,p2,p3,p4 holding werewolf,seer,robber,villager; "up" moves each card to the player above.
+    expect(cards(up)).toEqual(["seer", "idiot", "robber", "villager", "werewolf"]);
+    const down = rigged(hands, ["villager", "villager", "villager"]);
+    runTo(down.s, "idiot");
+    night(down.s, down.ids[1], { dir: "down" });
+    expect(cards(down)).toEqual(["villager", "idiot", "werewolf", "seer", "robber"]);
+    expect(view(down.s, down.ids[1]).you.learned.at(-1)!.item).toEqual({ t: "moved", dir: "down" });
+    expect(() => night(down.s, down.ids[1], { dir: "left" as never })).toThrow();
+  });
+
+  it("the Revealer keeps a safe card face up for everyone from the day — and shows nothing if it was a wolf or the Tanner", () => {
+    const safe = rigged(["revealer", "villager", "werewolf", "seer"], ["tanner", "minion", "robber"]);
+    runTo(safe.s, "revealer");
+    expect(view(safe.s, safe.ids[3]).revealed).toBeNull();
+    night(safe.s, safe.ids[0], { players: [safe.ids[1]] });
+    expect(view(safe.s, safe.ids[3]).revealed).toBeNull(); // still night: nothing is public yet
+    runTo(safe.s, null);
+    for (const id of safe.ids) expect(view(safe.s, id).revealed).toEqual({ id: safe.ids[1], role: "villager" });
+    expect((onuwViewFor(HOST, safe.s, 0) as { revealed: unknown }).revealed).toEqual({ id: safe.ids[1], role: "villager" });
+
+    for (const target of [2, 1]) {
+      const g = rigged(["revealer", target === 2 ? "werewolf" : "tanner", "seer", "villager"], ["villager", "minion", "robber"]);
+      runTo(g.s, "revealer");
+      night(g.s, g.ids[0], { players: [g.ids[1]] });
+      runTo(g.s, null);
+      expect(view(g.s, g.ids[3]).revealed).toBeNull();
+      expect(view(g.s, g.ids[0]).you.learned.at(-1)!.item).toMatchObject({ t: "saw" });
+    }
+  });
+
+  it("the Bodyguard's vote protects its target from the vote and from the Hunter", () => {
+    const roles = (r: OnuwRole[]) => Object.fromEntries(r.map((x, i) => [`p${i}`, x]));
+    const ids = ["p0", "p1", "p2", "p3"];
+    // p2 is voted by p0 and p1 (2 votes), but the Bodyguard p3 voted for p2.
+    expect(resolveDeaths(ids, { p0: "p2", p1: "p2", p2: "p0", p3: "p2" }, roles(["villager", "villager", "werewolf", "bodyguard"]))).toEqual([]);
+    // A tie p1/p2 with p2 protected: only the unprotected one dies.
+    expect(resolveDeaths(ids, { p0: "p1", p1: "p2", p2: "p1", p3: "p2" }, roles(["villager", "villager", "werewolf", "bodyguard"]))).toEqual(["p1"]);
+    expect(resolveDeaths(ids, { p0: "p1", p1: "p2", p2: "p1", p3: "p0" }, roles(["villager", "villager", "werewolf", "bodyguard"]))).toEqual(["p1"]);
+    // The Hunter dies but the player they voted for is the Bodyguard's pick, so the shot is blocked.
+    expect(resolveDeaths(ids, { p0: "p1", p1: "p3", p2: "p1", p3: "p3" }, roles(["villager", "hunter", "werewolf", "bodyguard"]))).toEqual(["p1"]);
+  });
+
+  it("a Doppelgänger who copies the Mystic Wolf looks at once and wakes with the wolves", () => {
+    const { s, ids } = rigged(["doppelganger", "mysticwolf", "seer", "villager"], ["villager", "robber", "minion"]);
+    night(s, ids[0], { players: [ids[1]] });
+    expect(view(s, ids[0]).you.prompt).toEqual({ kind: "mysticwolf" });
+    night(s, ids[0], { players: [ids[3]] });
+    runTo(s, "werewolf");
+    expect(view(s, ids[0]).you.learned.at(-1)!.item).toEqual({ t: "allies", role: "werewolf", ids: [ids[1]] });
+  });
+
+  it("a whole 24-player night plays through: every prompt answerable, a result, and no leaks to the host", () => {
+    const s = createOnuwGame("BIG24", seededRng(11), 0);
+    const ids = Array.from({ length: 24 }, (_, i) => addOnuwPlayer(s, `P${i}`, rng).id);
+    onuwDispatch(s, HOST, { type: "host:start" }, 0, rng);
+    for (const id of ids) act(s, id, { type: "ready" });
+    expect(s.phase).toBe("NIGHT");
+    let acted = 0;
+    while (s.phase === "NIGHT") {
+      for (const id of ids) {
+        const prompt = view(s, id).you.prompt;
+        if (!prompt) continue;
+        const other = ids.filter((x) => x !== id);
+        const pick: NightPick =
+          prompt.kind === "idiot"
+            ? { dir: "up" }
+            : ["drunk", "wolfCenter", "apprentice"].includes(prompt.kind)
+              ? { centers: [1] }
+              : prompt.kind === "seer"
+                ? { centers: [0, 2] }
+                : prompt.kind === "troublemaker"
+                  ? { players: [other[0], other[1]] }
+                  : { players: [other[2]] };
+        night(s, id, pick);
+        acted++;
+      }
+      expect(JSON.stringify(onuwViewFor(HOST, s, 0))).not.toMatch(/"(startRole|learned|dealt)"/);
+      onuwTick(s, s.phaseEndsAt!, rng);
+    }
+    expect(acted).toBeGreaterThan(5);
+    expect(s.phase).toBe("DAY");
+    onuwDispatch(s, HOST, { type: "host:toVote" }, 0, rng);
+    ids.forEach((id, i) => act(s, id, { type: "vote", target: ids[(i + 1) % ids.length] }));
+    expect(s.phase).toBe("RESULT");
+    expect(s.result!.players).toHaveLength(24);
+    // Everyone got one vote, so nobody has two: nobody dies.
+    expect(s.result!.deaths).toEqual([]);
+  });
+});
+
 describe("ONUW votes and winners", () => {
   const roles = (r: OnuwRole[]) => Object.fromEntries(r.map((x, i) => [`p${i}`, x]));
   const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
@@ -283,6 +446,7 @@ describe("ONUW hidden information", () => {
         expect(v.result).toBeNull();
         // Every card value in the view is either your own dealt card or something your night showed you.
         const known = new Set<string>([v.you.startRole!]);
+        if (v.revealed) known.add(v.revealed.role);
         for (const e of v.you.learned) if ("role" in e.item) known.add(e.item.role);
         const seen = [...raw.matchAll(/:"([a-z]+)"/g)].map((m) => m[1]).filter((x) => (ROLE_KEYS as string[]).includes(x));
         for (const role of seen) expect(known, `${id} sees ${role}`).toContain(role);
@@ -319,7 +483,7 @@ describe("ONUW hidden information", () => {
   it("the wire parser refuses anything outside the protocol", () => {
     expect(parseOnuw('{"type":"act","action":{"type":"night","pick":{"players":["p1"]}}}').ok).toBe(true);
     expect(parseOnuw('{"type":"act","action":{"type":"night","pick":{"players":["p1"],"peek":true}}}').ok).toBe(false);
-    expect(parseOnuw('{"type":"act","action":{"type":"host:deck","deck":{"werewolf":9}}}').ok).toBe(false);
+    expect(parseOnuw('{"type":"act","action":{"type":"host:deck","deck":{"werewolf":99}}}').ok).toBe(false);
     expect(parseOnuw('{"type":"act","action":{"type":"host:deck","deck":{"wizard":1}}}').ok).toBe(false);
     expect(parseOnuw("nope").ok).toBe(false);
   });

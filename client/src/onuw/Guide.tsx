@@ -22,6 +22,7 @@ export function WerewolfHowToPlay() {
       <Section title="The idea">
         <ul className="space-y-2 list-disc pl-5">
           <li>Everybody gets one secret card. Three more cards go face down in the center, so nobody knows exactly which roles are in play.</li>
+          <li>Works from 3 to 30 players. The app builds a deck that grows with the table: more Werewolves, more roles with powers, and plenty of Villagers. The host can change it.</li>
           <li>During the night, some roles wake up and do something — look at cards, or swap them around. You might not be what you were dealt by morning.</li>
           <li>During the day, everyone talks: claim a role, share what you saw, or lie.</li>
           <li>Then everyone votes at once. The player with the most votes dies.</li>
@@ -35,7 +36,8 @@ export function WerewolfHowToPlay() {
             the center), the village wins only if nobody dies.
           </li>
           <li>
-            <b className="text-rose-300">Werewolf team</b> (Werewolves and the Minion) — wins if no Werewolf dies.
+            <b className="text-rose-300">Werewolf team</b> (Werewolves, Mystic Wolf, Dream Wolf and the Minion) — wins if no Werewolf dies.
+            The Mystic Wolf and Dream Wolf count as Werewolves when it comes to dying.
           </li>
           <li>
             <b className="text-amber-300">The Tanner</b> — wins only if they die. If the Tanner dies and no Werewolf does, the Werewolves lose too.
@@ -89,6 +91,7 @@ export function WerewolfHowToPlay() {
           <li>The player with the most votes dies. If players tie for the most, they all die.</li>
           <li>Nobody dies if nobody gets more than one vote. Only do this if you're sure there are no Werewolves among you.</li>
           <li>If the Hunter dies, the player the Hunter voted for dies too.</li>
+          <li>The player the Bodyguard voted for can't die at all — not from the vote and not from the Hunter.</li>
         </ul>
       </Section>
 
@@ -107,6 +110,10 @@ export function WerewolfHowToPlay() {
         <ul className="mt-2 space-y-2 list-disc pl-5 text-sm text-zinc-300">
           <li>If no player is a Werewolf and only the Minion dies, nobody wins: the village needed nobody to die, and the Minion needed somebody else to.</li>
           <li>If the Tanner dies, the Minion can't win either, even when no player is a Werewolf. The Tanner's death stops the whole werewolf team.</li>
+          <li>The Dream Wolf doesn't wake. The Minion sees them; the other Werewolves don't. The Mystic Wolf wakes with the Werewolves, and if the Mystic Wolf is alone, they get the lone-wolf peek at a center card.</li>
+          <li>The Village Idiot moves cards along the player list in the order players joined (the order shown on the host screen), skipping themself. Up and Down wrap round.</li>
+          <li>The Revealer's flip is public from the start of the day. It happens last, after the Insomniac, so it shows the card as it ended the night.</li>
+          <li>The Beholder sees the Seer by the card the Seer was dealt, at the Beholder's turn, before the Robber and Troublemaker act.</li>
           <li>The Doppelgänger who copies the Minion sees the Werewolves at the Minion's step, together with the real Minion.</li>
           <li>If you don't pick before your step's time runs out, the phone skips your optional action. The Drunk's swap and the Doppelgänger's copy aren't optional, so the phone picks at random for you.</li>
         </ul>
@@ -129,7 +136,10 @@ export function WerewolfRoles() {
     <Page>
       <WerewolfNav page="roles" />
       <h1 className="text-3xl font-black">Roles</h1>
-      <p className="text-zinc-300">The 16 cards of the base game, in the order they wake up. Tap a team to filter.</p>
+      <p className="text-zinc-300">
+        The 12 base-game roles and 7 more from the expansions, in the order they wake up. The extra roles are what let the game
+        run up to 30 players. Tap a team to filter.
+      </p>
       <div className="flex gap-2 flex-wrap">
         {FILTERS.map((f) => (
           <button
@@ -180,5 +190,5 @@ export function WerewolfRoles() {
 }
 
 function ordinal(n: number): string {
-  return ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "last"][n] ?? `#${n}`;
+  return ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "last"][n] ?? `#${n}`;
 }

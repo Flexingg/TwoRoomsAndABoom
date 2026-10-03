@@ -12,9 +12,10 @@ export type Ref = { player: string } | { center: number };
 export type Learned =
   | { t: "copied"; from: string; role: OnuwRole }
   | { t: "saw"; at: Ref; role: OnuwRole }
-  | { t: "allies"; role: "werewolf" | "mason"; ids: string[] }
+  | { t: "allies"; role: "werewolf" | "mason" | "seer"; ids: string[] }
   | { t: "swapped"; a: Ref; b: Ref }
   | { t: "robbed"; from: string; role: OnuwRole }
+  | { t: "moved"; dir: "up" | "down" }
   | { t: "skipped" }
   | { t: "auto"; note: string };
 
@@ -30,7 +31,11 @@ export type Prompt =
   | { kind: "seer" }
   | { kind: "robber" }
   | { kind: "troublemaker" }
-  | { kind: "drunk" };
+  | { kind: "drunk" }
+  | { kind: "mysticwolf" }
+  | { kind: "apprentice" }
+  | { kind: "idiot" }
+  | { kind: "revealer" };
 
 export interface OnuwOptions {
   deck: DeckCounts;
@@ -84,6 +89,8 @@ interface Common {
   phaseEndsAt: number | null;
   serverNow: number;
   gameNumber: number;
+  /** A card the Revealer left face up. Public from the day on. */
+  revealed: { id: string; role: OnuwRole } | null;
   result: OnuwResult | null;
   error?: string;
 }
@@ -121,6 +128,8 @@ export type OnuwViewer = { kind: "host" } | { kind: "player"; id: string };
 export interface NightPick {
   players?: string[];
   centers?: number[];
+  /** The Village Idiot's direction along the player list. */
+  dir?: "up" | "down";
   skip?: boolean;
 }
 

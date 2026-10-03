@@ -39,8 +39,8 @@ class Client {
   frames: AnyView[] = [];
   opened: Promise<void>;
   private waiters: Array<{ pred: (v: AnyView) => boolean; done: (v: AnyView) => void }> = [];
-  constructor(port: number) {
-    this.ws = new WebSocket(`ws://127.0.0.1:${port}/ws/onuw`);
+  constructor(port: number, ws?: WebSocket) {
+    this.ws = ws ?? new WebSocket(`ws://127.0.0.1:${port}/ws/onuw`);
     this.opened = new Promise((r) => this.ws.once("open", () => r()));
     this.ws.on("message", (d) => {
       const v = JSON.parse(String(d)) as AnyView;
@@ -204,5 +204,57 @@ describe("ONUW persistence", () => {
     expect(v.phase).toBe("NIGHT");
     expect(v.you.startRole).toBe(before.you.startRole);
     expect(v.phaseEndsAt).toBe(before.phaseEndsAt);
+  });
+});
+
+describe("joining from one shared IP (a whole party on one venue Wi-Fi, or behind Fly's proxy)", () => {
+  it("25 players from one address all get in; repeated wrong codes still get blocked", async () => {
+    const host = await client();
+    host.send({ type: "create" });
+    const hv = await host.until<OnuwHostView>((v) => v.kind === "host");
+    for (let i = 0; i < 25; i++) {
+      const c = await client();
+      c.send({ type: "join", code: hv.code, name: `Guest${i}` });
+      await c.until((v) => v.kind === "player");
+    }
+    await host.until((v) => (v.roster as unknown[]).length === 25);
+
+    // Several sockets from the same address (each socket has its own message-rate limit).
+    let guesser = await client();
+    for (let s = 0; s < 4; s++) {
+      guesser = await client();
+      for (let i = 0; i < 8; i++) guesser.send({ type: "join", code: "ZZZZ", name: "Guess" });
+      await guesser.until((v) => /No game with code|Too many join/.test(String(v.error)));
+    }
+    guesser.send({ type: "join", code: "ZZZZ", name: "Guess" });
+    await guesser.until((v) => /Too many join attempts/.test(String(v.error)));
+    // Even the right code is refused for a minute once a device has been guessing.
+    guesser.send({ type: "join", code: hv.code, name: "Lucky" });
+    await guesser.until((v) => v.kind === "none" && /Too many join attempts/.test(String(v.error)));
+  });
+
+  it("behind Fly, each guest's own address (fly-client-ip) is what's counted", async () => {
+    const host = await client();
+    host.send({ type: "create" });
+    const hv = await host.until<OnuwHostView>((v) => v.kind === "host");
+    const spoof = (ip: string) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${app.port()}/ws/onuw`, { headers: { "fly-client-ip": ip } });
+      const c = new Client(0, ws);
+      clients.push(c);
+      return c;
+    };
+    let a = spoof("203.0.113.1");
+    for (let s = 0; s < 4; s++) {
+      a = spoof("203.0.113.1");
+      await a.opened;
+      for (let i = 0; i < 8; i++) a.send({ type: "join", code: "ZZZZ", name: "Guess" });
+      await a.until((v) => /No game with code|Too many join/.test(String(v.error)));
+    }
+    a.send({ type: "join", code: "ZZZZ", name: "Guess" });
+    await a.until((v) => /Too many join attempts/.test(String(v.error)));
+    const b = spoof("203.0.113.2");
+    await b.opened;
+    b.send({ type: "join", code: hv.code, name: "Innocent" });
+    await b.until((v) => v.kind === "player");
   });
 });

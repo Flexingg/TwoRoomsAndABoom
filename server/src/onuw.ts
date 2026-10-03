@@ -21,6 +21,7 @@ import {
 import { parseOnuw } from "../../shared/src/onuw/intents.js";
 import type { OnuwAction, OnuwClientView, OnuwViewer } from "../../shared/src/onuw/protocol.js";
 import { seededRng, type Rng } from "../../shared/src/rng.js";
+import { clientIp } from "./client-ip.js";
 import { cryptoRng } from "./crypto-rng.js";
 import type { Clock } from "./room.js";
 
@@ -260,18 +261,20 @@ export function createOnuwHub(opts: { clock: Clock; seed?: number; dbPath: strin
   const store = new OnuwStore(opts.seed ?? Date.now() ^ (Math.random() * 0x7fffffff), clock, opts.dbPath);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
   const joinAttempts = new Map<string, { n: number; resetAt: number }>();
+  // Only failed joins count: a whole party shares one venue IP, and must all be able to join.
   const joinAllowed = (ip: string, now: number) => {
     const e = joinAttempts.get(ip);
-    if (!e || now > e.resetAt) {
-      joinAttempts.set(ip, { n: 1, resetAt: now + JOIN_WINDOW_MS });
-      return true;
-    }
-    return ++e.n <= JOIN_ATTEMPTS_PER_IP;
+    return !e || now > e.resetAt || e.n < JOIN_ATTEMPTS_PER_IP;
+  };
+  const joinFailed = (ip: string, now: number) => {
+    const e = joinAttempts.get(ip);
+    if (!e || now > e.resetAt) joinAttempts.set(ip, { n: 1, resetAt: now + JOIN_WINDOW_MS });
+    else e.n += 1;
   };
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const conn = new Conn(ws);
-    const ip = String(req.socket.remoteAddress ?? "?");
+    const ip = clientIp(req);
     const noGame = (error: string) => conn.send({ kind: "none", serverNow: clock.now(), error });
     ws.on("pong", () => (conn.alive = true));
     ws.on("message", (data) => {
@@ -291,7 +294,10 @@ export function createOnuwHub(opts: { clock: Clock; seed?: number; dbPath: strin
         case "join": {
           if (!joinAllowed(ip, now)) return noGame("Too many join attempts from this device — wait a minute and try again.");
           const room = store.get(msg.code);
-          if (!room) return noGame(`No game with code “${msg.code.toUpperCase()}”.`);
+          if (!room) {
+            joinFailed(ip, now);
+            return noGame(`No game with code “${msg.code.toUpperCase()}”.`);
+          }
           try {
             const seat = addOnuwPlayer(room.state, msg.name, cryptoRng);
             if (current) current.detach(conn);

@@ -135,6 +135,12 @@ screen sees no cards until the reveal.
   `onuw_games` table of the same `games.db`.
 - **Client:** `client/src/onuw/`: host screen, phone, how-to-play and roles pages.
 
+**Roles and table size.** The 12 base-game roles plus seven from the expansions (Mystic Wolf, Dream Wolf,
+Apprentice Seer, Beholder, Village Idiot, Revealer, Bodyguard) let one game run from 3 to 30 players. Up to
+10 players the recommended deck is the rulebook's: two Werewolves and base roles. Above that it adds
+Werewolves and the expansion roles, then Villagers; at 24 players it is 27 cards with about 5 wolf cards.
+The host can edit any count (box limits: 6 Werewolves, 12 Villagers, 1 of most others, 2 Masons).
+
 **Running a game:** open `/werewolf` on a shared screen and press **Create a game**. Players scan the QR code.
 The deck follows the player count automatically (players + 3) until the host edits it. **Deal**, everyone
 looks at their card and taps *I've seen it*, and then the night runs. The host screen calls each role in the
@@ -160,6 +166,29 @@ real WebSockets, reconnects a phone mid-vote, and restarts the server mid-night.
 Screenshots are in `docs/screenshots/onuw/`. Set `CHROMIUM_PATH` if your Playwright browser build differs.
 
 The app ships no Bezier Games art: roles are shown as text with a glyph.
+
+## Deploying to Fly.io
+
+Needs [flyctl](https://fly.io/docs/flyctl/install/) and a Fly account. The `Dockerfile` and `fly.toml` are in
+the repo root. From a clone of this repo:
+
+```bash
+fly auth login
+fly launch --copy-config --no-deploy   # name the app (it must be unique); say NO to a database; keep fly.toml
+fly volumes create game_data --size 1 --region <the region in fly.toml> --yes
+fly scale count 1
+fly deploy
+fly open                               # https://<your-app>.fly.dev: the homepage
+```
+
+- **One machine only.** Live games are held in one process's memory (and snapshotted to SQLite on the
+  volume). `fly.toml` turns off auto-stop and the volume is bound to one machine, so don't scale beyond 1.
+- **Updates:** `fly deploy` again. The machine restarts, reloads unfinished games from the volume, and phones
+  reconnect to their seats. Don't deploy in the middle of a round if you can avoid it.
+- **Logs and health:** `fly logs`, and `https://<app>.fly.dev/api/health`.
+- **Cost:** one `shared-cpu-1x` 512 MB machine and a 1 GB volume, a few dollars a month.
+- **Behind Fly's proxy:** HTTPS and secure WebSockets are automatic. The join rate limit counts only failed
+  joins, by the guest's real address (`fly-client-ip`), so a whole party on one Wi-Fi can join.
 
 ## Rules summary (from the publisher's sheets in `printable_files/`)
 

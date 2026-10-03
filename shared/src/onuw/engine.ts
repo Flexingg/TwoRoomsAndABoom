@@ -24,6 +24,7 @@ import {
   CENTER_CARDS,
   deckList,
   deckSize,
+  isWolf,
   MAX_PLAYERS,
   MIN_PLAYERS,
   nightSteps,
@@ -54,6 +55,8 @@ export interface OnuwSecret {
   cards: Record<string, OnuwRole>;
   center: OnuwRole[];
   doppelCopy: OnuwRole | null;
+  /** The card the Revealer left face up. */
+  revealed: { id: string; role: OnuwRole } | null;
   learned: Record<string, LearnedEntry[]>;
   /** Actors who have finished the current night step. */
   done: string[];
@@ -107,7 +110,7 @@ export function createOnuwGame(code: string, rng: Rng, now: number): OnuwState {
 }
 
 function emptySecret(hostToken: string, tokens: Record<string, string>): OnuwSecret {
-  return { hostToken, tokens, dealt: {}, centerStart: [], cards: {}, center: [], doppelCopy: null, learned: {}, done: [], votes: {} };
+  return { hostToken, tokens, dealt: {}, centerStart: [], cards: {}, center: [], doppelCopy: null, revealed: null, learned: {}, done: [], votes: {} };
 }
 
 // ---- seats ----------------------------------------------------------------------------------------
@@ -300,7 +303,8 @@ function startNight(s: OnuwState, now: number): void {
   startStep(s, now);
 }
 
-const ACTIVE_COPIES: OnuwRole[] = ["seer", "robber", "troublemaker", "drunk"];
+/** Roles whose action the Doppelgänger does at once, in the Doppelgänger's own step. */
+const ACTIVE_COPIES: OnuwRole[] = ["seer", "apprentice", "robber", "troublemaker", "idiot", "drunk", "revealer", "mysticwolf"];
 
 function holderOf(s: OnuwState, role: OnuwRole): string[] {
   return s.players.filter((p) => s.secret.dealt[p.id] === role).map((p) => p.id);
@@ -310,10 +314,17 @@ function doppel(s: OnuwState): string | null {
   return holderOf(s, "doppelganger")[0] ?? null;
 }
 
-/** Who woke as a Werewolf (the dealt Werewolves, plus a Doppelgänger who copied one). */
+/** Who woke as a Werewolf (the dealt Werewolves and Mystic Wolf, plus a Doppelgänger who copied one). */
 function nightWolves(s: OnuwState): string[] {
   const d = doppel(s);
-  return [...holderOf(s, "werewolf"), ...(d && s.secret.doppelCopy === "werewolf" ? [d] : [])];
+  const copy = s.secret.doppelCopy;
+  return [...holderOf(s, "werewolf"), ...holderOf(s, "mysticwolf"), ...(d && (copy === "werewolf" || copy === "mysticwolf") ? [d] : [])];
+}
+
+/** Wolves the Minion can see: those who woke, plus the Dream Wolf (who never wakes). */
+function minionSees(s: OnuwState): string[] {
+  const d = doppel(s);
+  return [...nightWolves(s), ...holderOf(s, "dreamwolf"), ...(d && s.secret.doppelCopy === "dreamwolf" ? [d] : [])];
 }
 
 /** The players this step wakes. Roles act by the card they were dealt, not the card they hold now. */
@@ -329,6 +340,8 @@ export function actorsFor(s: OnuwState, step: StepKey): string[] {
       return [...holderOf(s, "minion"), ...copied("minion")];
     case "mason":
       return [...holderOf(s, "mason"), ...copied("mason")];
+    case "beholder":
+      return [...holderOf(s, "beholder"), ...copied("beholder")];
     case "doppelInsomniac":
       return copied("insomniac");
     default:
@@ -356,7 +369,7 @@ function startStep(s: OnuwState, now: number): void {
       if (actors.length > 1) s.secret.done.push(id);
     }
   } else if (step === "minion") {
-    const wolves = nightWolves(s);
+    const wolves = minionSees(s);
     for (const id of actors) {
       learn(s, id, step, { t: "allies", role: "werewolf", ids: wolves.filter((x) => x !== id) });
       s.secret.done.push(id);
@@ -364,6 +377,13 @@ function startStep(s: OnuwState, now: number): void {
   } else if (step === "mason") {
     for (const id of actors) {
       learn(s, id, step, { t: "allies", role: "mason", ids: actors.filter((x) => x !== id) });
+      s.secret.done.push(id);
+    }
+  } else if (step === "beholder") {
+    const d = doppel(s);
+    const seers = [...holderOf(s, "seer"), ...(d && s.secret.doppelCopy === "seer" ? [d] : [])];
+    for (const id of actors) {
+      learn(s, id, step, { t: "allies", role: "seer", ids: seers.filter((x) => x !== id) });
       s.secret.done.push(id);
     }
   } else if (step === "insomniac" || step === "doppelInsomniac") {
@@ -386,10 +406,14 @@ export function promptFor(s: OnuwState, id: string): Prompt | null {
     }
     case "werewolf":
       return { kind: "wolfCenter" };
+    case "mysticwolf":
     case "seer":
+    case "apprentice":
     case "robber":
     case "troublemaker":
+    case "idiot":
     case "drunk":
+    case "revealer":
       return { kind: step };
     default:
       return null;
@@ -445,6 +469,30 @@ function nightAction(s: OnuwState, me: string, pick: NightPick): void {
       } else fail("Pick one player, or two center cards.");
       return done();
     }
+    case "mysticwolf": {
+      if (players.length !== 1 || centers.length) fail("Pick one other player.");
+      learn(s, me, step, { t: "saw", at: { player: players[0] }, role: s.secret.cards[players[0]] });
+      return done();
+    }
+    case "apprentice": {
+      if (centers.length !== 1 || players.length) fail("Pick one center card.");
+      learn(s, me, step, { t: "saw", at: { center: centers[0] }, role: s.secret.center[centers[0]] });
+      return done();
+    }
+    case "idiot": {
+      if (!pick.dir || players.length || centers.length) fail("Pick up or down.");
+      shift(s, me, pick.dir!);
+      learn(s, me, step, { t: "moved", dir: pick.dir! });
+      return done();
+    }
+    case "revealer": {
+      if (players.length !== 1 || centers.length) fail("Pick one other player.");
+      const role = s.secret.cards[players[0]];
+      learn(s, me, step, { t: "saw", at: { player: players[0] }, role });
+      // A wolf or the Tanner flips back down; anything else stays face up for the whole table.
+      if (!isWolf(role) && role !== "tanner") s.secret.revealed = { id: players[0], role };
+      return done();
+    }
     case "robber": {
       if (players.length !== 1 || centers.length) fail("Pick one other player.");
       swap(s, { player: me }, { player: players[0] });
@@ -464,6 +512,16 @@ function nightAction(s: OnuwState, me: string, pick: NightPick): void {
       return done();
     }
   }
+}
+
+/** The Village Idiot: every other player's card moves one place along the list (in join order), wrapping. */
+function shift(s: OnuwState, me: string, dir: "up" | "down"): void {
+  const ids = s.players.map((p) => p.id).filter((id) => id !== me);
+  const cards = ids.map((id) => s.secret.cards[id]);
+  ids.forEach((id, i) => {
+    // "down": each card moves to the next player along the list, so a player receives their predecessor's card.
+    s.secret.cards[id] = cards[(i + (dir === "down" ? -1 : 1) + ids.length) % ids.length];
+  });
 }
 
 function copy(s: OnuwState, me: string, target: string): void {
@@ -551,13 +609,15 @@ export function resolveDeaths(ids: string[], votes: Record<string, string>, fina
   const tally: Record<string, number> = {};
   for (const id of ids) if (votes[id]) tally[votes[id]] = (tally[votes[id]] ?? 0) + 1;
   const max = Math.max(0, ...Object.values(tally));
+  // The Bodyguard's vote protects its target from every kind of death.
+  const shielded = new Set(ids.filter((id) => finalRole[id] === "bodyguard" && votes[id]).map((id) => votes[id]));
   // Nobody dies unless someone has more than one vote; a tie at the top kills everyone in the tie.
-  const dead = max >= 2 ? ids.filter((id) => tally[id] === max) : [];
+  const dead = max >= 2 ? ids.filter((id) => tally[id] === max && !shielded.has(id)) : [];
   // The Hunter takes their vote down with them — and a Hunter shot by a Hunter shoots too.
   for (let i = 0; i < dead.length; i++) {
     const id = dead[i];
     const target = votes[id];
-    if (finalRole[id] === "hunter" && target && !dead.includes(target)) dead.push(target);
+    if (finalRole[id] === "hunter" && target && !dead.includes(target) && !shielded.has(target)) dead.push(target);
   }
   return dead;
 }
@@ -567,8 +627,8 @@ export function resolveWinners(
   dead: string[],
   finalRole: Record<string, OnuwRole>,
 ): { village: boolean; werewolf: boolean; tanner: boolean } {
-  const wolves = ids.filter((id) => finalRole[id] === "werewolf");
-  const wolfDied = dead.some((id) => finalRole[id] === "werewolf");
+  const wolves = ids.filter((id) => isWolf(finalRole[id]));
+  const wolfDied = dead.some((id) => isWolf(finalRole[id]));
   const tannerDied = dead.some((id) => finalRole[id] === "tanner");
   if (wolves.length > 0) return { village: wolfDied, werewolf: !wolfDied && !tannerDied, tanner: tannerDied };
   // No Werewolf among the players: the village needs nobody to die; a Minion needs somebody else to.
@@ -658,6 +718,7 @@ export function onuwViewFor(viewer: OnuwViewer, s: OnuwState, now: number, error
     phaseEndsAt: s.phaseEndsAt,
     serverNow: now,
     gameNumber: s.gameNumber,
+    revealed: ["DAY", "VOTE", "RESULT"].includes(s.phase) ? (s.secret.revealed ?? null) : null,
     result: s.phase === "RESULT" ? structuredClone(s.result) : null,
     ...(error ? { error } : {}),
   };

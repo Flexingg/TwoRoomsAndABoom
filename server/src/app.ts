@@ -12,6 +12,7 @@ import { parseWire } from "../../shared/src/intents.js";
 import { addPlayer, GameError, viewerForToken } from "../../shared/src/state.js";
 import { viewFor } from "../../shared/src/view.js";
 import { Connection } from "./connection.js";
+import { clientIp } from "./client-ip.js";
 import { cryptoRng } from "./crypto-rng.js";
 import { createOnuwHub, type OnuwHub } from "./onuw.js";
 import type { Clock } from "./room.js";
@@ -137,20 +138,24 @@ export function createApp(opts: AppOptions): Promise<App> {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
   });
 
-  /** Join attempts per IP, so a 4-letter code can't be guessed (PLAN.md "Security"). */
+  /**
+   * Code-guessing protection (PLAN.md "Security"): a device that keeps joining with codes that don't exist is
+   * slowed down. Only FAILED attempts count — 30 people on one venue Wi-Fi share one public IP, and must all be
+   * able to join. Behind Fly's proxy the socket address is the proxy's, so the real address is its header.
+   */
   function joinAllowed(ip: string, now: number): boolean {
     const entry = joinAttempts.get(ip);
-    if (!entry || now > entry.resetAt) {
-      joinAttempts.set(ip, { n: 1, resetAt: now + JOIN_WINDOW_MS });
-      return true;
-    }
-    entry.n += 1;
-    return entry.n <= JOIN_ATTEMPTS_PER_IP;
+    return !entry || now > entry.resetAt || entry.n < JOIN_ATTEMPTS_PER_IP;
+  }
+  function joinFailed(ip: string, now: number): void {
+    const entry = joinAttempts.get(ip);
+    if (!entry || now > entry.resetAt) joinAttempts.set(ip, { n: 1, resetAt: now + JOIN_WINDOW_MS });
+    else entry.n += 1;
   }
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const conn = new Connection(ws);
-    const ip = String(req.socket.remoteAddress ?? "?");
+    const ip = clientIp(req);
     const noGame = (error: string) => conn.send(viewFor({ kind: "spectator" }, null, clock.now(), error));
 
     ws.on("pong", () => (conn.alive = true));
@@ -186,6 +191,7 @@ export function createApp(opts: AppOptions): Promise<App> {
           }
           const room = store.get(parsed.cmd.code);
           if (!room) {
+            joinFailed(ip, now);
             noGame(`No game with code “${parsed.cmd.code}”.`);
             return;
           }

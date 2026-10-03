@@ -3,7 +3,7 @@ import type { NightPick, OnuwAction, OnuwPlayerView, Prompt } from "../../../sha
 import { CENTER_CARDS, ROLE_BY_KEY, STEP_TEXT } from "../../../shared/src/onuw/roles";
 import { useWakeLock, type Status } from "../useGame";
 import { Btn, ConnBadge, ErrorBanner, Section } from "../ui";
-import { DeckList, HoldToPeek, NightNotes, ResultView, RoleFace, Timer } from "./ui";
+import { DeckList, HoldToPeek, NightNotes, RevealedBanner, ResultView, RoleFace, Timer } from "./ui";
 import { loadOnuwSession, useOnuw } from "./useOnuw";
 
 export function WerewolfPlayer() {
@@ -153,6 +153,7 @@ function Game({ view, offset, act, forget, status }: { view: OnuwPlayerView; off
 
       {view.phase === "DAY" && (
         <div className="space-y-4">
+          <RevealedBanner revealed={view.revealed} roster={view.roster} />
           <p className="text-zinc-300">Everybody's awake. Work out who the Werewolves are — say what you saw (or lie about it). The vote opens when the timer ends.</p>
           <NightNotes learned={you.learned} roster={view.roster} me={you.id} />
           <Section title="Cards in this game">
@@ -163,6 +164,7 @@ function Game({ view, offset, act, forget, status }: { view: OnuwPlayerView; off
 
       {view.phase === "VOTE" && (
         <div className="space-y-4">
+          <RevealedBanner revealed={view.revealed} roster={view.roster} />
           <p className="text-zinc-300">Who dies? Tap a player. You can change your mind until everyone has voted.</p>
           <div className="grid gap-2">
             {view.roster
@@ -209,6 +211,10 @@ const PHASE_TITLE: Record<string, string> = {
 const PROMPT_TEXT: Record<Prompt["kind"], { title: string; text: string; optional: boolean }> = {
   doppelganger: { title: "Doppelgänger", text: "Pick another player. You'll see their card and become that role.", optional: false },
   wolfCenter: { title: "Lone Werewolf", text: "You're the only Werewolf. You may look at one center card.", optional: true },
+  mysticwolf: { title: "Mystic Wolf", text: "Look at one other player's card.", optional: true },
+  apprentice: { title: "Apprentice Seer", text: "Look at one center card.", optional: true },
+  idiot: { title: "Village Idiot", text: "Move every other player's card one place along the player list — up or down. Your own card stays put.", optional: true },
+  revealer: { title: "Revealer", text: "Flip another player's card. If it isn't a Werewolf or the Tanner, it stays face up for everybody.", optional: true },
   seer: { title: "Seer", text: "Look at another player's card — or at two center cards.", optional: true },
   robber: { title: "Robber", text: "Swap your card with another player's, then see your new card.", optional: true },
   troublemaker: { title: "Troublemaker", text: "Swap the cards of two other players. You won't see them.", optional: true },
@@ -219,8 +225,8 @@ function NightPrompt({ prompt, view, act }: { prompt: Prompt; view: OnuwPlayerVi
   const [players, setPlayers] = useState<string[]>([]);
   const [centers, setCenters] = useState<number[]>([]);
   const info = PROMPT_TEXT[prompt.kind];
-  const wantPlayers = prompt.kind === "troublemaker" ? 2 : ["doppelganger", "seer", "robber"].includes(prompt.kind) ? 1 : 0;
-  const wantCenters = prompt.kind === "seer" ? 2 : ["wolfCenter", "drunk"].includes(prompt.kind) ? 1 : 0;
+  const wantPlayers = prompt.kind === "troublemaker" ? 2 : ["doppelganger", "seer", "robber", "mysticwolf", "revealer"].includes(prompt.kind) ? 1 : 0;
+  const wantCenters = prompt.kind === "seer" ? 2 : ["wolfCenter", "drunk", "apprentice"].includes(prompt.kind) ? 1 : 0;
 
   const togglePlayer = (id: string) => {
     setCenters([]);
@@ -240,6 +246,26 @@ function NightPrompt({ prompt, view, act }: { prompt: Prompt; view: OnuwPlayerVi
         <div className="text-2xl font-black">{info.title}</div>
         <p className="mt-1 text-zinc-200">{info.text}</p>
       </div>
+      {prompt.kind === "idiot" && (
+        <div className="space-y-3">
+          <ol className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm list-decimal list-inside">
+            {view.roster.map((r) => (
+              <li key={r.id} className={r.id === view.you.id ? "text-zinc-500" : ""}>
+                {r.name}
+                {r.id === view.you.id && " (you — stays put)"}
+              </li>
+            ))}
+          </ol>
+          <div className="grid grid-cols-2 gap-2">
+            <Btn onClick={() => submit({ dir: "up" })}>↑ Up</Btn>
+            <Btn onClick={() => submit({ dir: "down" })}>↓ Down</Btn>
+          </div>
+          <Btn kind="ghost" className="w-full" onClick={() => submit({ skip: true })}>
+            Skip
+          </Btn>
+          <p className="text-xs text-zinc-400">Up: each card moves to the player above. Down: to the player below. The ends wrap round.</p>
+        </div>
+      )}
       {wantPlayers > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {view.roster
@@ -273,7 +299,7 @@ function NightPrompt({ prompt, view, act }: { prompt: Prompt; view: OnuwPlayerVi
           </div>
         </div>
       )}
-      <div className="flex gap-2">
+      <div className={`flex gap-2 ${prompt.kind === "idiot" ? "hidden" : ""}`}>
         <Btn className="flex-1" disabled={!ready} onClick={() => submit(players.length ? { players } : { centers })}>
           Confirm
         </Btn>

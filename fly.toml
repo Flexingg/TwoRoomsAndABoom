@@ -1,0 +1,53 @@
+# Fly.io config for Game Night (Two Rooms and a Boom + One Night Ultimate Werewolf).
+#
+#   fly launch --copy-config --no-deploy      # first time only: pick your own app name
+#   fly volumes create game_data --size 1 --region <primary_region> --yes
+#   fly scale count 1                          # see "one machine only" below
+#   fly deploy
+#
+# One machine only: live games (rooms, timers, WebSocket connections) are held in that process's memory
+# and snapshotted to SQLite on the volume. A second machine would split a game's players across two
+# processes that can't see each other.
+
+app = "game-night-change-me"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  HOST = "0.0.0.0"
+  DB_PATH = "/data/games.db"
+  NODE_ENV = "production"
+
+# Game snapshots: a restart or a deploy mid-game keeps every seat, card and timer.
+[mounts]
+  source = "game_data"
+  destination = "/data"
+  initial_size = "1gb"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Never stop the machine: a stopped machine drops every connected phone, and a game night can sit idle
+  # for minutes between rounds.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -28,7 +28,7 @@ const GAMES: GameCard[] = [
     title: "One Night Ultimate Werewolf",
     glyph: "🐺",
     tagline: "One night, one day, one vote. Look at cards, swap them, then argue about who's a Werewolf. Your phone does the night.",
-    facts: ["3–10 players", "One round · ~10 min", "Phones do the night"],
+    facts: ["3–30 players", "One round · ~10 min", "Phones do the night"],
     host: "/werewolf",
     join: "/werewolf/play",
     rules: "/werewolf/how-to-play",

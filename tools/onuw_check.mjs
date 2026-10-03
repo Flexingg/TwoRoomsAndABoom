@@ -2,7 +2,7 @@
 // pages, then a host screen + 4 phones play a whole game through the real UI — deal, a timed night where
 // each phone does its own action, the day, the vote and the reveal. Run `npm run build` first.
 //
-//   node tools/onuw_check.mjs [--port 8798] [--shots docs/screenshots/onuw] [--attach]
+//   node tools/onuw_check.mjs [--port 8798] [--players 4] [--shots docs/screenshots/onuw] [--attach]
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -12,7 +12,7 @@ const PORT = Number(arg("port", 8798));
 const SHOTS = arg("shots", "/tmp/onuw-shots");
 const ATTACH = process.argv.includes("--attach");
 const BASE = `http://127.0.0.1:${PORT}`;
-const N = 4;
+const N = Number(arg("players", 4));
 mkdirSync(SHOTS, { recursive: true });
 
 let failures = 0;
@@ -61,9 +61,9 @@ try {
   ok(/Who wins/i.test(how) && /The night, in order/i.test(how) && /Doppelgänger-Insomniac/.test(how), "Werewolf how-to-play renders");
   await page.screenshot({ path: `${SHOTS}/02-how-to-play.png`, fullPage: false });
   await page.goto(`${BASE}/werewolf/roles`, { waitUntil: "networkidle" });
-  ok((await page.locator("article").count()) === 12, "Werewolf roles page lists all 12 roles");
+  ok((await page.locator("article").count()) === 19, "Werewolf roles page lists all 19 roles");
   await page.getByRole("button", { name: "Werewolf", exact: true }).click();
-  ok((await page.locator("article").count()) === 2, "roles filter: werewolf team = Werewolf + Minion");
+  ok((await page.locator("article").count()) === 4, "roles filter: werewolf team = Werewolf, Minion, Mystic Wolf, Dream Wolf");
   await page.screenshot({ path: `${SHOTS}/03-roles.png`, fullPage: false });
   const desk = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const deskPage = await desk.newPage();
@@ -91,8 +91,8 @@ try {
     players.push(p);
   }
   await host.getByText(`Players (${N})`).waitFor();
-  ok(/7 \/ 7 cards/.test(await host.locator("body").innerText()), "deck auto-sized to players + 3");
-  await host.getByRole("button", { name: "12s" }).click();
+  ok(new RegExp(`${N + 3} / ${N + 3} cards`).test(await host.locator("body").innerText()), "deck auto-sized to players + 3");
+  await host.getByRole("button", { name: N > 8 ? "8s" : "12s" }).click();
   await host.screenshot({ path: `${SHOTS}/04-host-lobby.png`, fullPage: true });
   await host.getByRole("button", { name: "Deal the cards" }).click();
 
@@ -111,7 +111,7 @@ try {
   let acted = 0;
   const prompted = new Set();
   let shotPrompt = false;
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + 360_000;
   while (Date.now() < deadline) {
     if (await host.getByRole("button", { name: "Vote now" }).isVisible().catch(() => false)) break;
     for (const p of players) {
@@ -128,7 +128,9 @@ try {
         const playerButtons = section.locator(".grid-cols-2 button");
         const centerButtons = section.locator(".grid-cols-3 button");
         const tap = (l) => l.click({ timeout: 2000 });
-        if (title === "Troublemaker") {
+        if (title === "Village Idiot") {
+          await tap(section.getByRole("button", { name: /Up/ }));
+        } else if (title === "Troublemaker") {
           await tap(playerButtons.nth(0));
           await tap(playerButtons.nth(1));
         } else if (title === "Seer") {
@@ -139,7 +141,7 @@ try {
         } else {
           await tap(centerButtons.nth(1));
         }
-        await tap(section.getByRole("button", { name: "Confirm" }));
+        if (title !== "Village Idiot") await tap(section.getByRole("button", { name: "Confirm" }));
         await p.getByText("Your night").waitFor({ timeout: 3000 });
       } catch {
         continue;
@@ -161,7 +163,8 @@ try {
   }
   await host.getByText("What happened").waitFor();
   const res = await host.locator("body").innerText();
-  ok(/Phone1 died/.test(res), "the vote kills the player with the most votes");
+  // Everyone votes Phone1, so Phone1 dies — unless the Bodyguard is in the game and shielded them.
+  ok(/Phone1 died/.test(res) || /Nobody died/.test(res), "the vote kills the player with the most votes (or the Bodyguard saves them)");
   ok(/wins!|Nobody wins/.test(res), "the result names a winner");
   await host.screenshot({ path: `${SHOTS}/09-host-result.png`, fullPage: true });
   for (const p of players) await p.getByText(/You win!|You lose/).waitFor();

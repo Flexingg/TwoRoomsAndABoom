@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { Learned, LearnedEntry, OnuwResult, Ref, RosterEntry } from "../../../shared/src/onuw/protocol";
-import { ONUW_ROLES, ROLE_BY_KEY, STEP_TEXT, type OnuwRole, type OnuwTeam } from "../../../shared/src/onuw/roles";
+import { ONUW_ROLES, ROLE_BY_KEY, STEP_ORDER, STEP_TEXT, type OnuwRole, type OnuwTeam } from "../../../shared/src/onuw/roles";
 import { fmt, Section, useRemaining } from "../ui";
 
 export const TEAM_NAME: Record<OnuwTeam, string> = { village: "Village", werewolf: "Werewolf", tanner: "Tanner" };
@@ -116,12 +116,15 @@ export function describeLearned(e: LearnedEntry, roster: RosterEntry[], me: stri
       if ("player" in it.at && it.at.player === me) return `Looked at own card: the ${roleName(it.role)}.`;
       return `Saw ${refText(it.at, roster, me)}: the ${roleName(it.role)}.`;
     case "allies":
+      if (it.role === "seer") return it.ids.length ? `The Seer is ${names(it.ids)}.` : "Nobody is the Seer — that card is in the center.";
       if (it.role === "mason") return it.ids.length ? `The other Mason${it.ids.length > 1 ? "s are" : " is"} ${names(it.ids)}.` : "No other Mason — the other Mason card is in the center.";
       if (e.step === "minion") return it.ids.length ? `The Werewolf${it.ids.length > 1 ? "ves are" : " is"} ${names(it.ids)}.` : "No player woke as a Werewolf.";
       return it.ids.length ? `The other Werewolf${it.ids.length > 1 ? "ves are" : " is"} ${names(it.ids)}.` : "The only Werewolf.";
     case "swapped":
       if ("player" in it.a && it.a.player === me && "center" in it.b) return `Swapped own card with center card ${it.b.center + 1} (without looking).`;
       return `Swapped ${refText(it.a, roster, me)} with ${refText(it.b, roster, me)} (without looking).`;
+    case "moved":
+      return `Moved every other player's card ${it.dir} the player list.`;
     case "robbed":
       return `Robbed ${nameIn(roster, it.from)}: now the ${roleName(it.role)}.`;
     case "skipped":
@@ -144,6 +147,19 @@ export function NightNotes({ learned, roster, me }: { learned: LearnedEntry[]; r
         ))}
       </ul>
     </Section>
+  );
+}
+
+/** The card the Revealer left face up, shown to everyone. */
+export function RevealedBanner({ revealed, roster }: { revealed: { id: string; role: OnuwRole } | null; roster: RosterEntry[] }) {
+  if (!revealed) return null;
+  return (
+    <div className="rounded-2xl border border-amber-600 bg-amber-950/50 p-4">
+      <div className="text-xs uppercase tracking-widest text-amber-300">The Revealer flipped a card</div>
+      <div className="mt-1 text-lg">
+        <b>{nameIn(roster, revealed.id)}</b> is the <RoleChip role={revealed.role} />. It stays face up — it isn't a Werewolf or the Tanner.
+      </div>
+    </div>
   );
 }
 
@@ -247,7 +263,7 @@ export function ResultView({ result, roster, me, footer }: { result: OnuwResult;
   );
 }
 
-const STEP_RANK = ["doppelganger", "werewolf", "minion", "mason", "seer", "robber", "troublemaker", "drunk", "insomniac", "doppelInsomniac"];
+const STEP_RANK = STEP_ORDER as string[];
 const order = (e: LearnedEntry) => STEP_RANK.indexOf(e.step);
 
 /** Nav strip shared by the Werewolf pages. */

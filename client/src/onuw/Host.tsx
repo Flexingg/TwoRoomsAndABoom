@@ -4,7 +4,7 @@ import { CENTER_CARDS, deckSize, ONUW_ROLES, STEP_TEXT } from "../../../shared/s
 import { Qr } from "../Host";
 import { Btn, ConnBadge, ErrorBanner, Section } from "../ui";
 import type { Status } from "../useGame";
-import { DeckList, ResultView, RoleChip, Timer } from "./ui";
+import { DeckList, RevealedBanner, ResultView, RoleChip, Timer } from "./ui";
 import { useOnuw } from "./useOnuw";
 
 export function WerewolfHost() {
@@ -103,6 +103,9 @@ function HostGame({ view, offset, act, forget, status }: { view: OnuwHostView; o
               <Btn onClick={() => act({ type: "host:toVote" })}>Vote now</Btn>
             </div>
           </div>
+          <div className="mt-4">
+            <RevealedBanner revealed={view.revealed} roster={view.roster} />
+          </div>
           <div className="mt-6">
             <h3 className="text-xs uppercase tracking-widest text-zinc-400 mb-2">Cards in this game ({view.roster.length} players + {CENTER_CARDS} in the center)</h3>
             <DeckList deck={view.options.deck} />
@@ -111,7 +114,8 @@ function HostGame({ view, offset, act, forget, status }: { view: OnuwHostView; o
       )}
       {view.phase === "VOTE" && (
         <Section>
-          <p className="text-2xl font-bold">Vote on your phones.</p>
+          <RevealedBanner revealed={view.revealed} roster={view.roster} />
+          <p className="mt-3 text-2xl font-bold">Vote on your phones.</p>
           <p className="mt-1 text-zinc-400">
             {view.roster.filter((r) => r.voted).length} of {view.roster.length} have voted. Votes stay secret until everyone's in.
           </p>
@@ -159,7 +163,7 @@ function Lobby({ view, act }: { view: OnuwHostView; act: (a: OnuwAction) => void
         <div className="flex flex-col items-center gap-3">
           <Qr text={joinUrl} />
           <div className="text-center text-sm text-zinc-300 break-all">{joinUrl}</div>
-          <p className="text-sm text-zinc-400 text-center">Scan, or open the address and type the code. 3 to 10 players.</p>
+          <p className="text-sm text-zinc-400 text-center">Scan, or open the address and type the code. 3 to 30 players.</p>
         </div>
       </Section>
       <Section title={`Players (${view.roster.length})`}>
