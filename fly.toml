@@ -16,7 +16,7 @@ primary_region = "iad"
   dockerfile = "Dockerfile"
 
 [env]
-  PORT = "3000"
+  PORT = "8080"
   HOST = "0.0.0.0"
   DB_PATH = "/data/games.db"
   NODE_ENV = "production"
@@ -28,7 +28,7 @@ primary_region = "iad"
   initial_size = "1gb"
 
 [http_service]
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
   # Never stop the machine: a stopped machine drops every connected phone, and a game night can sit idle
   # for minutes between rounds.

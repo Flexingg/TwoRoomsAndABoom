@@ -44,7 +44,7 @@ $D "docker run --rm --entrypoint sh $IMG -c 'ls /app; echo \"-- PDFs anywhere --
 echo
 echo "### 4. run it and check health, the card art, the pages"
 $D "docker rm -f $NAME" >/dev/null 2>&1
-$D "docker run -d --rm --name $NAME -p 127.0.0.1:$HOSTPORT:3000 $IMG" >/dev/null
+$D "docker run -d --rm --name $NAME -p 127.0.0.1:$HOSTPORT:8080 $IMG" >/dev/null
 ok=0
 for _ in $(seq 1 25); do
   h=$(curl -s --max-time 3 "http://127.0.0.1:$HOSTPORT/api/health")

@@ -1,5 +1,5 @@
 # Reverse proxy for the optional HTTPS profile. Caddy gets the certificate automatically.
 {$DOMAIN} {
 	encode gzip
-	reverse_proxy app:3000
+	reverse_proxy app:8080
 }
