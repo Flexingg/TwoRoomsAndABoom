@@ -16,10 +16,10 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
-        name: "Two Rooms and a Boom",
-        short_name: "Two Rooms",
-        description: "Phones replace the cards, leader cards and timer for Two Rooms and a Boom.",
-        start_url: "/play",
+        name: "Game Night — Two Rooms and a Boom · One Night Ultimate Werewolf",
+        short_name: "Game Night",
+        description: "Phones replace the cards for Two Rooms and a Boom and One Night Ultimate Werewolf.",
+        start_url: "/",
         scope: "/",
         display: "standalone",
         background_color: "#111117",

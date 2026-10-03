@@ -2,6 +2,27 @@
 
 Last updated: 2026-09-25 14:50 EDT (rules review of the pre-game pages; Docker image built and verified; card art re-verified by eye)
 
+## Homepage + One Night Ultimate Werewolf (2026-10-03)
+
+- `/` is now a game picker. Two Rooms' host screen moved to `/two-rooms`. `/play`, `/how-to-play` and `/roles`
+  are unchanged, so existing QR codes still work. The Two Rooms URLs below are otherwise still correct.
+- One Night Ultimate Werewolf is at `/werewolf` (host), `/werewolf/play`, `/werewolf/how-to-play` and
+  `/werewolf/roles`. It has its own engine (`shared/src/onuw/`), socket (`/ws/onuw`) and SQLite table.
+- Suite: `npm test` → **282 tests, 14 files, all green** (26 new). `node tools/onuw_check.mjs` → ALL PASS.
+  `tools/browser_check.mjs` and `tools/pregame_check.mjs` were re-run after the route change → PASS.
+- Not done: no publisher art for One Night (glyphs only); no Vampire/Alien/Daybreak roles beyond the seven added.
+
+## One Night to 30 players + Fly.io (2026-10-03)
+
+- One Night now runs 3–30 players: seven more roles (Mystic Wolf, Dream Wolf, Apprentice Seer, Beholder,
+  Village Idiot, Revealer, Bodyguard), box limits raised (6 Werewolves, 12 Villagers). ≤10 players keeps the
+  rulebook deck. `npm test` → **295 tests**; `node tools/onuw_check.mjs --players 24` plays a whole 24-phone
+  game in a real browser (screenshots in `docs/screenshots/onuw-24/`).
+- Join rate limit fixed for big tables: only failed joins count, by `fly-client-ip` (it used to cap 20 joins/min
+  per IP, which would have locked out guests 21+ on one venue Wi-Fi — for Two Rooms as well).
+- `fly.toml` added; README has the deploy steps. NOT verified: no Docker daemon or Fly account in this session,
+  so the image build and `fly deploy` have not been run here. The same production build was run with Fly's env vars.
+
 ## TL;DR
 
 The app runs on this machine as a systemd user service and has been driven end to end in a **real browser**

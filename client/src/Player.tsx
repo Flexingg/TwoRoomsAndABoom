@@ -19,7 +19,10 @@ export function Player() {
     return (
       <main className="mx-auto max-w-md p-5 space-y-5">
         <ConnBadge status={status} />
-        <h1 className="text-3xl font-black">Join the game</h1>
+        <a href="/" className="text-sm text-zinc-400">
+          ← All games
+        </a>
+        <h1 className="text-3xl font-black">Join Two Rooms and a Boom</h1>
         {view?.kind === "none" && <ErrorBanner error={view.error} />}
         {saved && !view && <p className="text-zinc-400">Reconnecting to your seat…</p>}
         <label className="block">
